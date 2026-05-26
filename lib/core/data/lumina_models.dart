@@ -148,6 +148,24 @@ class HabitProgress {
   final int completedToday;
   final int targetPerDay;
 
+  HabitProgress copyWith({
+    String? habitId,
+    String? name,
+    String? emoji,
+    Color? color,
+    int? completedToday,
+    int? targetPerDay,
+  }) {
+    return HabitProgress(
+      habitId: habitId ?? this.habitId,
+      name: name ?? this.name,
+      emoji: emoji ?? this.emoji,
+      color: color ?? this.color,
+      completedToday: completedToday ?? this.completedToday,
+      targetPerDay: targetPerDay ?? this.targetPerDay,
+    );
+  }
+
   double get progress {
     if (targetPerDay == 0) {
       return 0;
@@ -208,6 +226,123 @@ class MentorInsight {
       headline: json['headline'] as String? ?? '',
       body: json['body'] as String? ?? '',
       generatedAt: DateTime.tryParse(json['generatedAt'] as String? ?? ''),
+    );
+  }
+}
+
+@immutable
+class DailyLog {
+  DailyLog({
+    String? id,
+    required this.date,
+    this.mood,
+    this.moodNote,
+    this.energy,
+    this.tasks = const [],
+    this.completedHabitIds = const [],
+    this.notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? _uuid.v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
+
+  final String id;
+  final DateTime date;
+  final int? mood;
+  final String? moodNote;
+  final int? energy;
+  final List<Task> tasks;
+  final List<String> completedHabitIds;
+  final String? notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  int get completedSections {
+    var count = 0;
+    if (mood != null) {
+      count++;
+    }
+    if (energy != null) {
+      count++;
+    }
+    if (tasks.isNotEmpty) {
+      count++;
+    }
+    if (completedHabitIds.isNotEmpty) {
+      count++;
+    }
+    if ((notes ?? '').trim().isNotEmpty) {
+      count++;
+    }
+    return count;
+  }
+
+  bool get isComplete => completedSections == 5;
+
+  DailyLog copyWith({
+    DateTime? date,
+    int? mood,
+    String? moodNote,
+    int? energy,
+    List<Task>? tasks,
+    List<String>? completedHabitIds,
+    String? notes,
+    DateTime? updatedAt,
+    bool clearMoodNote = false,
+    bool clearNotes = false,
+  }) {
+    return DailyLog(
+      id: id,
+      date: date ?? this.date,
+      mood: mood ?? this.mood,
+      moodNote: clearMoodNote ? null : moodNote ?? this.moodNote,
+      energy: energy ?? this.energy,
+      tasks: tasks ?? this.tasks,
+      completedHabitIds: completedHabitIds ?? this.completedHabitIds,
+      notes: clearNotes ? null : notes ?? this.notes,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'date': date.toIso8601String(),
+      'mood': mood,
+      'moodNote': moodNote,
+      'energy': energy,
+      'tasks': tasks.map((task) => task.toJson()).toList(),
+      'completedHabitIds': completedHabitIds,
+      'notes': notes,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  factory DailyLog.fromJson(Map<dynamic, dynamic> json) {
+    final rawTasks = json['tasks'];
+    final rawHabitIds = json['completedHabitIds'];
+
+    return DailyLog(
+      id: json['id'] as String?,
+      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      mood: json['mood'] as int?,
+      moodNote: json['moodNote'] as String?,
+      energy: json['energy'] as int?,
+      tasks: rawTasks is List
+          ? rawTasks
+                .whereType<Map<dynamic, dynamic>>()
+                .map(Task.fromJson)
+                .toList()
+          : const [],
+      completedHabitIds: rawHabitIds is List
+          ? rawHabitIds.whereType<String>().toList()
+          : const [],
+      notes: json['notes'] as String?,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
     );
   }
 }
