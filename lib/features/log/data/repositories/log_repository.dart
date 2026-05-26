@@ -1,14 +1,21 @@
+import 'dart:async';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
+import 'package:lumina/core/services/sync_service.dart';
 import 'package:lumina/features/dashboard/data/repositories/dashboard_repository.dart';
 
 class LogRepository {
-  LogRepository({DashboardRepository? dashboardRepository})
-    : _dashboardRepository = dashboardRepository ?? DashboardRepository();
+  LogRepository({
+    DashboardRepository? dashboardRepository,
+    SyncService? syncService,
+  }) : _dashboardRepository = dashboardRepository ?? DashboardRepository(),
+       _syncService = syncService ?? SyncService();
 
   final DashboardRepository _dashboardRepository;
+  final SyncService _syncService;
   final DateFormat _keyFormat = DateFormat('yyyy-MM-dd');
 
   String get todayKey => _keyFormat.format(DateTime.now());
@@ -51,6 +58,7 @@ class LogRepository {
     }
 
     await logsBox?.put('streak', _calculateNextStreak(logsBox));
+    unawaited(_syncService.syncDailyLog(log));
   }
 
   Future<void> saveHabits(List<HabitProgress> habits) async {
