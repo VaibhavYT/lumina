@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumina/core/data/lumina_models.dart';
 import 'package:lumina/features/dashboard/data/repositories/dashboard_repository.dart';
+import 'package:lumina/features/goals/data/repositories/goal_repository.dart';
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   return DashboardRepository();
@@ -18,6 +19,8 @@ class DashboardState {
     required this.streak,
     required this.habits,
     required this.mentorInsight,
+    required this.goalSnapshot,
+    required this.burnoutWarning,
   });
 
   final List<Task> tasks;
@@ -25,6 +28,8 @@ class DashboardState {
   final int streak;
   final List<HabitProgress> habits;
   final MentorInsight? mentorInsight;
+  final GoalSnapshot goalSnapshot;
+  final MentorInsight? burnoutWarning;
 
   int get completedTasks => tasks.where((task) => task.isCompleted).length;
 
@@ -36,6 +41,8 @@ class DashboardState {
     int? streak,
     List<HabitProgress>? habits,
     MentorInsight? mentorInsight,
+    GoalSnapshot? goalSnapshot,
+    MentorInsight? burnoutWarning,
   }) {
     return DashboardState(
       tasks: tasks ?? this.tasks,
@@ -43,6 +50,8 @@ class DashboardState {
       streak: streak ?? this.streak,
       habits: habits ?? this.habits,
       mentorInsight: mentorInsight ?? this.mentorInsight,
+      goalSnapshot: goalSnapshot ?? this.goalSnapshot,
+      burnoutWarning: burnoutWarning ?? this.burnoutWarning,
     );
   }
 }
@@ -86,6 +95,8 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       _repository.getCurrentStreak(),
       _repository.getTodaysHabitProgress(),
       _repository.getLatestMentorInsight(),
+      _repository.getActiveGoal(),
+      _repository.getActiveBurnoutWarning(),
     ]);
 
     return DashboardState(
@@ -94,6 +105,8 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       streak: results[2]! as int,
       habits: results[3]! as List<HabitProgress>,
       mentorInsight: results[4] as MentorInsight?,
+      goalSnapshot: results[5]! as GoalSnapshot,
+      burnoutWarning: results[6] as MentorInsight?,
     );
   }
 }

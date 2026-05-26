@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
+import 'package:lumina/core/services/notification_service.dart';
 import 'package:lumina/core/theme/app_theme.dart';
 import 'package:lumina/core/theme/theme_provider.dart';
 import 'package:lumina/router/app_router.dart';
@@ -29,6 +30,7 @@ Future<void> main() async {
   await Hive.openBox<dynamic>(AppConstants.settingsBox);
 
   await _initializeSupabase();
+  await NotificationService.initialize();
 
   runApp(const ProviderScope(child: AppRoot()));
 }
@@ -87,7 +89,9 @@ class AppRoot extends ConsumerWidget {
           ),
           child: ColoredBox(
             color: colors.backgroundPrimary,
-            child: child ?? const SizedBox.shrink(),
+            child: NotificationBannerHost(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         );
       },

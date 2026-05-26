@@ -242,6 +242,12 @@ class MentorRepository {
   }
 
   Future<void> dismissInsight(String id) async {
+    final deviceId = await this.deviceId;
+    await _edgeClient.invoke(
+      'fetch-mentor-insights',
+      payload: {'action': 'dismiss', 'deviceId': deviceId, 'insightId': id},
+      headers: {'x-device-id': deviceId},
+    );
     final feed = await getInsightFeed();
     final updated = feed.where((item) => item.id != id).toList();
     final box = await _box();

@@ -128,8 +128,12 @@ class SyncService {
         for (final item in insights.whereType<Map>())
           MentorInsight(
             id: item['id'] as String?,
+            insightType: item['insight_type'] as String? ?? 'general',
             headline: item['headline'] as String? ?? 'Mentor Insight',
             body: item['body'] as String? ?? '',
+            metadata: item['metadata'] is Map
+                ? Map<String, dynamic>.from(item['metadata'] as Map)
+                : const {},
             generatedAt: DateTime.tryParse(
               item['generated_at'] as String? ?? '',
             ),

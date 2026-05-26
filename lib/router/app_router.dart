@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumina/features/auth/data/auth_repository.dart';
@@ -13,6 +13,8 @@ import 'package:lumina/features/settings/presentation/screens/settings_screen.da
 import 'package:lumina/router/app_shell.dart';
 import 'package:lumina/shared/animations/fade_slide_transition.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   final authRefresh = authRepository.isAvailable
@@ -21,6 +23,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(() => authRefresh?.dispose());
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     refreshListenable: authRefresh,
     redirect: (context, state) {

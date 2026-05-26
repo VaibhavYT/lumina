@@ -36,9 +36,25 @@ Deno.serve(async (req) => {
     }
 
     await ensureProfile(deviceId);
+    if (payload.action === "dismiss") {
+      const insightId = asString(payload.insightId);
+      if (!insightId) {
+        return jsonResponse({ error: "insightId is required" }, 400);
+      }
+      const { error } = await supabase
+        .from("mentor_insights")
+        .update({ is_dismissed: true })
+        .eq("device_id", deviceId)
+        .eq("id", insightId);
+      if (error) {
+        throw new Error(error.message);
+      }
+      return jsonResponse({ success: true });
+    }
+
     const { data, error } = await supabase
       .from("mentor_insights")
-      .select("id, headline, body, generated_at")
+      .select("id, insight_type, headline, body, metadata, generated_at")
       .eq("device_id", deviceId)
       .eq("is_dismissed", false)
       .order("generated_at", { ascending: false })

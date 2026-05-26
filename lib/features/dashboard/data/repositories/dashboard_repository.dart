@@ -3,11 +3,23 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
+import 'package:lumina/core/services/device_identity_service.dart';
+import 'package:lumina/core/services/sync_service.dart';
+import 'package:lumina/features/goals/data/repositories/goal_repository.dart';
 
 class DashboardRepository {
-  DashboardRepository();
+  DashboardRepository({
+    GoalRepository? goalRepository,
+    SyncService? syncService,
+    DeviceIdentityService? identityService,
+  }) : _goalRepository = goalRepository ?? GoalRepository(),
+       _syncService = syncService ?? SyncService(),
+       _identityService = identityService ?? DeviceIdentityService();
 
   final DateFormat _keyFormat = DateFormat('yyyy-MM-dd');
+  final GoalRepository _goalRepository;
+  final SyncService _syncService;
+  final DeviceIdentityService _identityService;
 
   String _todayKey() => _keyFormat.format(DateTime.now());
 
@@ -15,15 +27,16 @@ class DashboardRepository {
     final box = await _openBox(AppConstants.tasksBox);
     final stored = box?.get(_todayKey());
     if (stored is List && stored.isNotEmpty) {
-      return stored
+      final localTasks = stored
           .whereType<Map<dynamic, dynamic>>()
           .map(Task.fromJson)
           .toList();
+      return _withRemoteGoalTasks(localTasks);
     }
 
     final seeded = _seedTasks();
     await box?.put(_todayKey(), seeded.map((task) => task.toJson()).toList());
-    return seeded;
+    return _withRemoteGoalTasks(seeded);
   }
 
   Future<MoodEntry?> getTodaysMoodEntry() async {
@@ -71,6 +84,25 @@ class DashboardRepository {
     return seeded;
   }
 
+  Future<GoalSnapshot> getActiveGoal() {
+    return _goalRepository.getActiveGoal();
+  }
+
+  Future<MentorInsight?> getActiveBurnoutWarning() async {
+    try {
+      final deviceId = await _identityService.getDeviceId();
+      final insights = await _syncService.fetchRecentInsights(deviceId);
+      for (final insight in insights) {
+        if (insight.insightType == 'burnout_warning') {
+          return insight;
+        }
+      }
+      return null;
+    } on Object {
+      return null;
+    }
+  }
+
   Future<void> saveTasks(List<Task> tasks) async {
     final box = await _openBox(AppConstants.tasksBox);
     await box?.put(_todayKey(), tasks.map((task) => task.toJson()).toList());
@@ -93,6 +125,22 @@ class DashboardRepository {
       return await Hive.openBox<dynamic>(name);
     } on Object {
       return null;
+    }
+  }
+
+  Future<List<Task>> _withRemoteGoalTasks(List<Task> localTasks) async {
+    try {
+      final goalTasks = await _goalRepository.getTodaysGoalTasks();
+      if (goalTasks.isEmpty) {
+        return localTasks;
+      }
+      final localIds = localTasks.map((task) => task.id).toSet();
+      return [
+        ...goalTasks.where((task) => !localIds.contains(task.id)),
+        ...localTasks,
+      ];
+    } on Object {
+      return localTasks;
     }
   }
 

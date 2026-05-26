@@ -33,6 +33,8 @@ dependencies:
 
   animated_text_kit: any
   cupertino_icons: ^1.0.8
+  firebase_core: any
+  firebase_messaging: any
   fl_chart: any
   flutter_animate: any
   flutter_dotenv: any

@@ -1,7 +1,11 @@
 const geminiUrl =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-export async function generateGeminiText(prompt: string, fallback: string) {
+export async function generateGeminiText(
+  prompt: string,
+  fallback: string,
+  options: { maxOutputTokens?: number; temperature?: number } = {},
+) {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) {
     return fallback;
@@ -14,8 +18,8 @@ export async function generateGeminiText(prompt: string, fallback: string) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.65,
-          maxOutputTokens: 800,
+          temperature: options.temperature ?? 0.65,
+          maxOutputTokens: options.maxOutputTokens ?? 800,
         },
       }),
     });
@@ -35,7 +39,23 @@ export async function generateGeminiText(prompt: string, fallback: string) {
 }
 
 export function safeJsonArray(text: string) {
-  const cleaned = text.replace(/```json|```/g, "").trim();
+  const cleaned = text
+    .replace(/```json|```/g, "")
+    .trim()
+    .replace(/^[^\[]*/, "")
+    .replace(/[^\]]*$/, "");
   const parsed = JSON.parse(cleaned);
   return Array.isArray(parsed) ? parsed : [];
+}
+
+export function safeJsonObject(text: string) {
+  const cleaned = text
+    .replace(/```json|```/g, "")
+    .trim()
+    .replace(/^[^{]*/, "")
+    .replace(/[^}]*$/, "");
+  const parsed = JSON.parse(cleaned);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
 }

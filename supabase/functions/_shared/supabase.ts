@@ -14,13 +14,21 @@ export function adminClient() {
   });
 }
 
-export async function ensureProfile(deviceId: string, displayName?: string) {
+export async function ensureProfile(
+  deviceId: string,
+  displayName?: string,
+  fcmToken?: string,
+) {
   const supabase = adminClient();
   if (!supabase) {
     return;
   }
-  await supabase.from("profiles").upsert({
+  const profile: Record<string, unknown> = {
     device_id: deviceId,
     display_name: displayName ?? null,
-  }, { onConflict: "device_id" });
+  };
+  if (fcmToken) {
+    profile.fcm_token = fcmToken;
+  }
+  await supabase.from("profiles").upsert(profile, { onConflict: "device_id" });
 }

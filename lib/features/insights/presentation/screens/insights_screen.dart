@@ -5,6 +5,8 @@ import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/features/insights/data/repositories/insights_repository.dart';
 import 'package:lumina/features/insights/presentation/providers/insights_notifier.dart';
 import 'package:lumina/features/insights/presentation/widgets/insights_widgets.dart';
+import 'package:lumina/features/goals/presentation/providers/goal_notifier.dart';
+import 'package:lumina/features/goals/presentation/widgets/goal_widgets.dart';
 import 'package:lumina/shared/widgets/shimmer_loader.dart';
 
 class InsightsScreen extends ConsumerWidget {
@@ -13,6 +15,7 @@ class InsightsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(insightsNotifierProvider);
+    final goalState = ref.watch(goalNotifierProvider).valueOrNull;
     final colors = context.colors;
 
     return Scaffold(
@@ -97,6 +100,10 @@ class InsightsScreen extends ConsumerWidget {
                     BurnoutRiskCard(analysis: burnout),
                     const SizedBox(height: AppSpacing.sectionGap),
                     HabitHeatmapCard(days: state.days),
+                    if (goalState?.snapshot.hasActiveGoal ?? false) ...[
+                      const SizedBox(height: AppSpacing.sectionGap),
+                      GoalProgressCard(snapshot: goalState!.snapshot),
+                    ],
                     const SizedBox(height: AppSpacing.sectionGap),
                     ProductivityPatternsCard(summary: state.productivity),
                     const SizedBox(height: AppSpacing.sectionGap),

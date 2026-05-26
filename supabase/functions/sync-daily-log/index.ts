@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { jsonHeaders } from "../_shared/agent_utils.ts";
 import { adminClient, ensureProfile } from "../_shared/supabase.ts";
 
 type PayloadRecord = Record<string, unknown>;
@@ -86,7 +87,11 @@ Deno.serve(async (req) => {
     }
 
     const profile = asRecord(payload.profile);
-    await ensureProfile(deviceId, asString(profile?.display_name));
+    await ensureProfile(
+      deviceId,
+      asString(profile?.display_name),
+      asString(profile?.fcm_token),
+    );
 
     const today = new Date().toISOString().slice(0, 10);
     const dailyLog = asRecord(payload.dailyLog);
@@ -208,6 +213,20 @@ Deno.serve(async (req) => {
           `habit local completion insert failed: ${insertError.message}`,
         );
       }
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (dailyLog && supabaseUrl && serviceKey) {
+      EdgeRuntime.waitUntil(
+        fetch(`${supabaseUrl}/functions/v1/burnout-interception-agent`, {
+          method: "POST",
+          headers: jsonHeaders(serviceKey),
+          body: JSON.stringify({ device_id: deviceId, log_date: logDate }),
+        }).catch((error) => {
+          console.error("Burnout agent call failed:", error);
+        }),
+      );
     }
 
     return jsonResponse({

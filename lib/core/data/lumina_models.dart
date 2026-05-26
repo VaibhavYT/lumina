@@ -202,6 +202,8 @@ class MentorInsight {
     String? id,
     required this.headline,
     required this.body,
+    this.insightType = 'general',
+    this.metadata = const {},
     DateTime? generatedAt,
   }) : id = id ?? _uuid.v4(),
        generatedAt = generatedAt ?? DateTime.now();
@@ -209,6 +211,8 @@ class MentorInsight {
   final String id;
   final String headline;
   final String body;
+  final String insightType;
+  final Map<String, dynamic> metadata;
   final DateTime generatedAt;
 
   Map<String, dynamic> toJson() {
@@ -216,16 +220,28 @@ class MentorInsight {
       'id': id,
       'headline': headline,
       'body': body,
+      'insightType': insightType,
+      'metadata': metadata,
       'generatedAt': generatedAt.toIso8601String(),
     };
   }
 
   factory MentorInsight.fromJson(Map<dynamic, dynamic> json) {
+    final rawMetadata = json['metadata'];
     return MentorInsight(
       id: json['id'] as String?,
       headline: json['headline'] as String? ?? '',
       body: json['body'] as String? ?? '',
-      generatedAt: DateTime.tryParse(json['generatedAt'] as String? ?? ''),
+      insightType:
+          json['insightType'] as String? ??
+          json['insight_type'] as String? ??
+          'general',
+      metadata: rawMetadata is Map
+          ? Map<String, dynamic>.from(rawMetadata)
+          : const {},
+      generatedAt: DateTime.tryParse(
+        json['generatedAt'] as String? ?? json['generated_at'] as String? ?? '',
+      ),
     );
   }
 }

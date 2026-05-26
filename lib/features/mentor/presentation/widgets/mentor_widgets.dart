@@ -489,31 +489,122 @@ class InsightFeed extends StatelessWidget {
             onDismissed: (_) => onDismiss(insight.id),
             child: Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: LuminaCard(
+              child: _InsightCard(insight: insight, onDismiss: onDismiss),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({required this.insight, required this.onDismiss});
+
+  final MentorInsight insight;
+  final ValueChanged<String> onDismiss;
+
+  bool get _isBurnoutWarning => insight.insightType == 'burnout_warning';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final accent = _isBurnoutWarning ? colors.errorColor : colors.primaryAccent;
+    final immediateAction = insight.metadata['immediateAction'] as String?;
+
+    return LuminaCard(
+      borderRadius: AppRadius.radiusXl,
+      padding: EdgeInsets.zero,
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(AppRadius.radiusXl),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    LuminaTag(label: _tagFor(insight.headline)),
+                    Row(
+                      children: [
+                        if (_isBurnoutWarning) ...[
+                          _PulseDot(color: colors.errorColor),
+                          const SizedBox(width: AppSpacing.sm),
+                        ],
+                        LuminaTag(
+                          label: _isBurnoutWarning
+                              ? 'Mentor Insight'
+                              : _tagFor(insight),
+                          color: _isBurnoutWarning
+                              ? colors.errorSoft
+                              : colors.primaryAccentSoft,
+                          textColor: accent,
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(insight.headline, style: context.textTheme.bodyLarge),
                     const SizedBox(height: 4),
                     Text(
                       insight.body,
                       style: context.textTheme.bodyMedium?.copyWith(
-                        color: context.colors.textSecondary,
+                        color: colors.textSecondary,
                       ),
                     ),
+                    if (_isBurnoutWarning && immediateAction != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colors.primaryAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(
+                            AppRadius.radiusMd,
+                          ),
+                        ),
+                        child: Text(
+                          immediateAction,
+                          style: context.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      LuminaButton(
+                        label: 'Done - feeling better',
+                        outlined: true,
+                        onPressed: () => onDismiss(insight.id),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
-  String _tagFor(String headline) {
-    final lower = headline.toLowerCase();
+  String _tagFor(MentorInsight insight) {
+    if (insight.insightType == 'weekly_debrief') {
+      return 'Weekly Debrief';
+    }
+    if (insight.insightType == 'morning_brief') {
+      return 'Morning Brief';
+    }
+    if (insight.insightType == 'goal_created') {
+      return 'Goal';
+    }
+    final lower = insight.headline.toLowerCase();
     if (lower.contains('strength')) {
       return 'Strength';
     }
