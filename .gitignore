@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 .env
+firebase.json
+google-services.json
+GoogleService-Info.plist
 
 # IntelliJ related
 *.iml

@@ -8,6 +8,7 @@ import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/services/device_identity_service.dart';
 import 'package:lumina/core/services/edge_function_client.dart';
 import 'package:lumina/core/services/supabase_status.dart';
+import 'package:lumina/firebase_options.dart';
 import 'package:lumina/router/app_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -31,7 +32,9 @@ class NotificationService {
 
   static Future<void> initialize() async {
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       final token = await messaging.getToken();
