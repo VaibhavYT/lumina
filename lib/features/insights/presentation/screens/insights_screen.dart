@@ -57,31 +57,31 @@ class InsightsScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                        Text(
-                          'Your Patterns',
-                          style: context.textTheme.displayMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Insights from the last ${state.range.days} days',
-                          style: context.textTheme.bodyMedium?.copyWith(
-                            color: colors.textSecondary,
+                          Text(
+                            'Your Patterns',
+                            style: context.textTheme.displayMedium,
                           ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        TimeRangeFilter(
-                          selected: state.range,
-                          onChanged: (range) => ref
-                              .read(insightsNotifierProvider.notifier)
-                              .setRange(range),
-                        ),
-                      ],
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            'Insights from the last ${state.range.days} days',
+                            style: context.textTheme.bodyMedium?.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          TimeRangeFilter(
+                            selected: state.range,
+                            onChanged: (range) => ref
+                                .read(insightsNotifierProvider.notifier)
+                                .setRange(range),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            SliverPadding(
+              SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.pagePadding,
                   AppSpacing.md,

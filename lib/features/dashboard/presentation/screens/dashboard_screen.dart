@@ -168,68 +168,71 @@ class _DashboardHeader extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child:
-                              Text(
-                                    greeting,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: context.textTheme.displayLarge,
-                                  )
-                                  .animate()
-                                  .fadeIn(duration: AppMotion.slow)
-                                  .slideY(begin: 0.16, end: 0),
-                        ),
-                        GestureDetector(
-                          onTap: () => context.go('/settings'),
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: colors.primaryAccent,
-                              shape: BoxShape.circle,
+                        Row(
+                          children: [
+                            Expanded(
+                              child:
+                                  Text(
+                                        greeting,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: context.textTheme.displayLarge,
+                                      )
+                                      .animate()
+                                      .fadeIn(duration: AppMotion.slow)
+                                      .slideY(begin: 0.16, end: 0),
                             ),
-                            child: Text(
-                              AppConstants.defaultDisplayName.substring(0, 1),
-                              style: context.textTheme.labelLarge?.copyWith(
-                                color: context.isDark
-                                    ? colors.backgroundPrimary
-                                    : Colors.white,
+                            GestureDetector(
+                              onTap: () => context.go('/settings'),
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: colors.primaryAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  AppConstants.defaultDisplayName.substring(
+                                    0,
+                                    1,
+                                  ),
+                                  style: context.textTheme.labelLarge?.copyWith(
+                                    color: context.isDark
+                                        ? colors.backgroundPrimary
+                                        : Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.textTheme.bodyMedium?.copyWith(
+                                color: colors.textSecondary,
+                              ),
+                            )
+                            .animate(delay: 100.ms)
+                            .fadeIn(duration: AppMotion.slow)
+                            .slideY(begin: 0.16, end: 0),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          greetingService.formattedDate(),
+                          style: context.textTheme.labelSmall?.copyWith(
+                            color: colors.textTertiary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.textTheme.bodyMedium?.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        )
-                        .animate(delay: 100.ms)
-                        .fadeIn(duration: AppMotion.slow)
-                        .slideY(begin: 0.16, end: 0),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      greetingService.formattedDate(),
-                      style: context.textTheme.labelSmall?.copyWith(
-                        color: colors.textTertiary,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      );
+            ),
+          );
         },
       ),
     );

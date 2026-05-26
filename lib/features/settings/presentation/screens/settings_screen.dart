@@ -6,6 +6,8 @@ import 'package:lumina/core/theme/app_radius.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/core/theme/theme_provider.dart';
 import 'package:lumina/core/utils/haptic_utils.dart';
+import 'package:lumina/features/auth/data/auth_repository.dart';
+import 'package:lumina/shared/widgets/lumina_button.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
@@ -16,6 +18,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final themeMode = ref.watch(themeProvider);
+    final auth = ref.watch(authRepositoryProvider);
+    final user = auth.currentUser;
     final isDark = themeMode != ThemeMode.light;
 
     return Scaffold(
@@ -83,6 +87,63 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            if (auth.isAvailable && user != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              LuminaCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: colors.secondaryAccentSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
+                            color: colors.secondaryAccent,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Account',
+                                style: context.textTheme.headlineMedium,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                user.email ?? 'Signed in',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.textTheme.bodySmall?.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    LuminaButton(
+                      label: 'Sign out',
+                      outlined: true,
+                      icon: PhosphorIcons.signOut(),
+                      onPressed: () async {
+                        HapticUtils.medium();
+                        await ref.read(authRepositoryProvider).signOut();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

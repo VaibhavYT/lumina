@@ -1032,108 +1032,109 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.colors.textTertiary,
-                  borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.colors.textTertiary,
+                    borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('New Habit', style: context.textTheme.headlineMedium),
-            const SizedBox(height: AppSpacing.md),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final emoji in _emojis)
-                    GestureDetector(
-                      onTap: () => setState(() => _emoji = emoji),
-                      child: AnimatedContainer(
-                        duration: AppMotion.fast,
-                        width: 44,
-                        height: 44,
-                        margin: const EdgeInsets.only(right: 8),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _emoji == emoji
-                                ? context.colors.primaryAccent
-                                : context.colors.divider,
+              const SizedBox(height: AppSpacing.lg),
+              Text('New Habit', style: context.textTheme.headlineMedium),
+              const SizedBox(height: AppSpacing.md),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final emoji in _emojis)
+                      GestureDetector(
+                        onTap: () => setState(() => _emoji = emoji),
+                        child: AnimatedContainer(
+                          duration: AppMotion.fast,
+                          width: 44,
+                          height: 44,
+                          margin: const EdgeInsets.only(right: 8),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _emoji == emoji
+                                  ? context.colors.primaryAccent
+                                  : context.colors.divider,
+                            ),
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
                           ),
                         ),
-                        child: Text(
-                          emoji,
-                          style: const TextStyle(fontSize: 22),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                style: context.textTheme.bodyLarge,
+                decoration: const InputDecoration(hintText: 'Habit name...'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  for (final color in _colors)
+                    GestureDetector(
+                      onTap: () => setState(() => _color = color),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
                         ),
+                        child: _color == color
+                            ? Icon(
+                                PhosphorIcons.check(PhosphorIconsStyle.bold),
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : null,
                       ),
                     ),
                 ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              style: context.textTheme.bodyLarge,
-              decoration: const InputDecoration(hintText: 'Habit name...'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                for (final color in _colors)
-                  GestureDetector(
-                    onTap: () => setState(() => _color = color),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  for (final frequency in ['Daily', 'Weekdays', 'Custom'])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(frequency),
+                        selected: _frequency == frequency,
+                        onSelected: (_) =>
+                            setState(() => _frequency = frequency),
                       ),
-                      child: _color == color
-                          ? Icon(
-                              PhosphorIcons.check(PhosphorIconsStyle.bold),
-                              color: Colors.white,
-                              size: 16,
-                            )
-                          : null,
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                for (final frequency in ['Daily', 'Weekdays', 'Custom'])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(frequency),
-                      selected: _frequency == frequency,
-                      onSelected: (_) => setState(() => _frequency = frequency),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            LuminaButton(
-              label: 'Add Habit',
-              onPressed: () {
-                widget.onAddHabit(_controller.text, _emoji, _color);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              LuminaButton(
+                label: 'Add Habit',
+                onPressed: () {
+                  widget.onAddHabit(_controller.text, _emoji, _color);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 
