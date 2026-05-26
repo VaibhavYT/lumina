@@ -36,8 +36,12 @@ Future<void> main() async {
 Future<void> _initializeSupabase() async {
   try {
     await dotenv.load(fileName: '.env', isOptional: true);
-    final url = dotenv.env[AppConstants.supabaseUrlKey];
-    final anonKey = dotenv.env[AppConstants.supabaseAnonKey];
+    final url =
+        dotenv.env[AppConstants.supabaseUrlKey] ??
+        dotenv.env[AppConstants.supabaseUrlAliasKey];
+    final anonKey =
+        dotenv.env[AppConstants.supabaseAnonKey] ??
+        dotenv.env[AppConstants.supabaseAnonAliasKey];
 
     if (url == null || anonKey == null || url.isEmpty || anonKey.isEmpty) {
       debugPrint('Lumina: Supabase credentials not found; local mode active.');

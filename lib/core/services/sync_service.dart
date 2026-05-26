@@ -4,31 +4,51 @@ import 'package:intl/intl.dart';
 import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
 import 'package:lumina/core/services/device_identity_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:lumina/core/services/edge_function_client.dart';
 
 class SyncService {
-  SyncService({DeviceIdentityService? identityService})
-    : _identityService = identityService ?? DeviceIdentityService();
+  SyncService({
+    DeviceIdentityService? identityService,
+    EdgeFunctionClient? edgeClient,
+  }) : _identityService = identityService ?? DeviceIdentityService(),
+       _edgeClient = edgeClient ?? EdgeFunctionClient();
 
   final DeviceIdentityService _identityService;
+  final EdgeFunctionClient _edgeClient;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   Future<void> syncDailyLog(DailyLog log) async {
     try {
       final deviceId = await _identityService.getDeviceId();
-      final client = Supabase.instance.client;
-      await client.from('profiles').upsert({
-        'device_id': deviceId,
-      }, onConflict: 'device_id');
-      await client.from('daily_logs').upsert({
-        'device_id': deviceId,
-        'log_date': _dateFormat.format(log.date),
-        'mood': log.mood,
-        'mood_note': log.moodNote,
-        'energy': log.energy,
-        'notes': log.notes,
-      }, onConflict: 'device_id,log_date');
-      await syncTasks(log.tasks, date: log.date);
+      final result = await _edgeClient.invoke(
+        'sync-daily-log',
+        payload: {
+          'deviceId': deviceId,
+          'profile': {'device_id': deviceId},
+          'dailyLog': {
+            'log_date': _dateFormat.format(log.date),
+            'mood': log.mood,
+            'mood_note': log.moodNote,
+            'energy': log.energy,
+            'notes': log.notes,
+          },
+          'tasks': [
+            for (final (index, task) in log.tasks.indexed)
+              {
+                'id': task.id,
+                'title': task.title,
+                'is_completed': task.isCompleted,
+                'priority': task.priority.name,
+                'sort_order': index,
+              },
+          ],
+          'completedHabitIds': log.completedHabitIds,
+        },
+        headers: {'x-device-id': deviceId},
+      );
+      if (!result.isSuccess) {
+        throw StateError(result.error ?? 'Daily log sync failed.');
+      }
     } on Object catch (error) {
       debugPrint('Lumina syncDailyLog queued: $error');
       await _queue('daily_log', log.toJson());
@@ -38,12 +58,19 @@ class SyncService {
   Future<void> syncHabitCompletion(String habitId, DateTime date) async {
     try {
       final deviceId = await _identityService.getDeviceId();
-      final client = Supabase.instance.client;
-      await client.from('habit_completions').upsert({
-        'habit_id': habitId,
-        'device_id': deviceId,
-        'completion_date': _dateFormat.format(date),
-      }, onConflict: 'habit_id,completion_date');
+      final result = await _edgeClient.invoke(
+        'sync-daily-log',
+        payload: {
+          'deviceId': deviceId,
+          'habitCompletions': [
+            {'habit_id': habitId, 'completion_date': _dateFormat.format(date)},
+          ],
+        },
+        headers: {'x-device-id': deviceId},
+      );
+      if (!result.isSuccess) {
+        throw StateError(result.error ?? 'Habit completion sync failed.');
+      }
     } on Object catch (error) {
       debugPrint('Lumina syncHabitCompletion queued: $error');
       await _queue('habit_completion', {
@@ -56,22 +83,26 @@ class SyncService {
   Future<void> syncTasks(List<Task> tasks, {DateTime? date}) async {
     try {
       final deviceId = await _identityService.getDeviceId();
-      final client = Supabase.instance.client;
-      final logDate = _dateFormat.format(date ?? DateTime.now());
-      final payload = [
-        for (final (index, task) in tasks.indexed)
-          {
-            'id': task.id,
-            'device_id': deviceId,
-            'log_date': logDate,
-            'title': task.title,
-            'is_completed': task.isCompleted,
-            'priority': task.priority.name,
-            'sort_order': index,
-          },
-      ];
-      if (payload.isNotEmpty) {
-        await client.from('tasks').upsert(payload);
+      final result = await _edgeClient.invoke(
+        'sync-daily-log',
+        payload: {
+          'deviceId': deviceId,
+          'tasks': [
+            for (final (index, task) in tasks.indexed)
+              {
+                'id': task.id,
+                'log_date': _dateFormat.format(date ?? DateTime.now()),
+                'title': task.title,
+                'is_completed': task.isCompleted,
+                'priority': task.priority.name,
+                'sort_order': index,
+              },
+          ],
+        },
+        headers: {'x-device-id': deviceId},
+      );
+      if (!result.isSuccess) {
+        throw StateError(result.error ?? 'Task sync failed.');
       }
     } on Object catch (error) {
       debugPrint('Lumina syncTasks queued: $error');
@@ -81,16 +112,20 @@ class SyncService {
 
   Future<List<MentorInsight>> fetchRecentInsights(String deviceId) async {
     try {
-      final client = Supabase.instance.client;
-      final response = await client
-          .from('mentor_insights')
-          .select()
-          .eq('device_id', deviceId)
-          .eq('is_dismissed', false)
-          .order('generated_at', ascending: false)
-          .limit(30);
+      final result = await _edgeClient.invoke(
+        'fetch-mentor-insights',
+        payload: {'deviceId': deviceId},
+        headers: {'x-device-id': deviceId},
+      );
+      if (!result.isSuccess) {
+        throw StateError(result.error ?? 'Insight fetch failed.');
+      }
+      final insights = result.data?['insights'];
+      if (insights is! List) {
+        return const [];
+      }
       return [
-        for (final item in response)
+        for (final item in insights.whereType<Map>())
           MentorInsight(
             id: item['id'] as String?,
             headline: item['headline'] as String? ?? 'Mentor Insight',

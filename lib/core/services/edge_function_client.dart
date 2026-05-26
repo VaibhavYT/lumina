@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:lumina/core/services/supabase_status.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EdgeResult<T> {
@@ -19,6 +20,9 @@ class EdgeFunctionClient {
     Map<String, String>? headers,
   }) async {
     try {
+      if (!SupabaseStatus.isInitialized) {
+        return const EdgeResult.failure('Supabase is not initialized.');
+      }
       final client = Supabase.instance.client;
       final response = await client.functions.invoke(
         functionName,
