@@ -123,9 +123,12 @@ class _DashboardHeader extends StatelessWidget {
             size: 16,
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            '$greeting, ${AppConstants.defaultDisplayName}',
-            style: context.textTheme.headlineMedium,
+          Flexible(
+            child: Text(
+              '$greeting, ${AppConstants.defaultDisplayName}',
+              style: context.textTheme.headlineMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -154,17 +157,17 @@ class _DashboardHeader extends StatelessWidget {
             ),
             child: Opacity(
               opacity: expandedFraction,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding,
-                  topPadding + AppSpacing.lg,
-                  AppSpacing.pagePadding,
-                  AppSpacing.md,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: AppSpacing.pagePadding,
+                    right: AppSpacing.pagePadding,
+                    bottom: AppSpacing.md,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                     Row(
                       children: [
                         Expanded(
@@ -223,8 +226,10 @@ class _DashboardHeader extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-          );
+            ],
+          ),
+        ),
+      );
         },
       ),
     );

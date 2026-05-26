@@ -52,9 +52,11 @@ class InsightsScreen extends ConsumerWidget {
                       AppSpacing.pagePadding,
                       0,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                         Text(
                           'Your Patterns',
                           style: context.textTheme.displayMedium,
@@ -78,7 +80,8 @@ class InsightsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              SliverPadding(
+            ),
+            SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.pagePadding,
                   AppSpacing.md,

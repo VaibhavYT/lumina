@@ -150,19 +150,30 @@ class MoodSelectorSection extends StatelessWidget {
         children: [
           Text('Mood', style: context.textTheme.headlineMedium),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (final mood in _moods)
-                _MoodBubble(
-                  option: mood,
-                  isSelected: selectedMood == mood.level,
-                  onTap: () {
-                    HapticUtils.selection();
-                    onMoodChanged(mood.level);
-                  },
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: math.max(constraints.maxWidth, 340.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (final mood in _moods)
+                        _MoodBubble(
+                          option: mood,
+                          isSelected: selectedMood == mood.level,
+                          onTap: () {
+                            HapticUtils.selection();
+                            onMoodChanged(mood.level);
+                          },
+                        ),
+                    ],
+                  ),
                 ),
-            ],
+              );
+            },
           ),
           AnimatedSwitcher(
             duration: AppMotion.fast,
@@ -1016,10 +1027,11 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
           color: context.colors.backgroundElevated,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -1120,7 +1132,8 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

@@ -163,19 +163,22 @@ class _LogLoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.pagePadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ShimmerLoader(width: 160, height: 28),
-            SizedBox(height: AppSpacing.sectionGap),
-            ShimmerLoader(height: 150),
-            SizedBox(height: AppSpacing.md),
-            ShimmerLoader(height: 120),
-            SizedBox(height: AppSpacing.md),
-            ShimmerLoader(height: 180),
-          ],
+      child: SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.pagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerLoader(width: 160, height: 28),
+              SizedBox(height: AppSpacing.sectionGap),
+              ShimmerLoader(height: 150),
+              SizedBox(height: AppSpacing.md),
+              ShimmerLoader(height: 120),
+              SizedBox(height: AppSpacing.md),
+              ShimmerLoader(height: 180),
+            ],
+          ),
         ),
       ),
     );
