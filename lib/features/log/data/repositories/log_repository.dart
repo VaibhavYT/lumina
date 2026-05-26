@@ -1,9 +1,6 @@
-import 'dart:async';
-
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
-import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
+import 'package:lumina/core/services/device_identity_service.dart';
+import 'package:lumina/core/services/edge_function_client.dart';
 import 'package:lumina/core/services/sync_service.dart';
 import 'package:lumina/features/dashboard/data/repositories/dashboard_repository.dart';
 
@@ -11,26 +8,41 @@ class LogRepository {
   LogRepository({
     DashboardRepository? dashboardRepository,
     SyncService? syncService,
+    EdgeFunctionClient? edgeClient,
+    DeviceIdentityService? identityService,
   }) : _dashboardRepository = dashboardRepository ?? DashboardRepository(),
-       _syncService = syncService ?? SyncService();
+       _syncService = syncService ?? SyncService(),
+       _edgeClient = edgeClient ?? EdgeFunctionClient(),
+       _identityService = identityService ?? DeviceIdentityService();
 
   final DashboardRepository _dashboardRepository;
   final SyncService _syncService;
-  final DateFormat _keyFormat = DateFormat('yyyy-MM-dd');
-
-  String get todayKey => _keyFormat.format(DateTime.now());
-
-  String get todayLogKey => 'log_$todayKey';
+  final EdgeFunctionClient _edgeClient;
+  final DeviceIdentityService _identityService;
 
   Future<DailyLog?> getTodayLog() async {
-    final box = await _openBox(AppConstants.logsBox);
-    final stored = box?.get(todayLogKey);
-    if (stored is Map) {
-      return DailyLog.fromJson(stored);
+    final data = await _today();
+    final log = data['log'];
+    final tasks = data['tasks'];
+    final completedHabitIds = data['completedHabitIds'];
+    if (log is Map) {
+      return DailyLog.fromJson({
+        ...Map<String, dynamic>.from(log),
+        'tasks': tasks is List ? tasks : const [],
+        'completedHabitIds': completedHabitIds is List
+            ? completedHabitIds.whereType<String>().toList()
+            : const <String>[],
+      });
     }
-
-    final tasks = await _dashboardRepository.getTodaysTasks();
-    return DailyLog(date: DateTime.now(), tasks: tasks);
+    return DailyLog(
+      date: DateTime.now(),
+      tasks: tasks is List
+          ? tasks.whereType<Map<dynamic, dynamic>>().map(Task.fromJson).toList()
+          : const [],
+      completedHabitIds: completedHabitIds is List
+          ? completedHabitIds.whereType<String>().toList()
+          : const [],
+    );
   }
 
   Future<List<HabitProgress>> getHabits() {
@@ -38,32 +50,11 @@ class LogRepository {
   }
 
   Future<void> saveDailyLog(DailyLog log) async {
-    final logsBox = await _openBox(AppConstants.logsBox);
-    final tasksBox = await _openBox(AppConstants.tasksBox);
-
-    await logsBox?.put(todayLogKey, log.toJson());
-    await tasksBox?.put(
-      todayKey,
-      log.tasks.map((task) => task.toJson()).toList(),
-    );
-
-    if (log.mood != null) {
-      final moodEntry = MoodEntry(
-        mood: log.mood!,
-        energy: log.energy ?? 3,
-        note: log.moodNote,
-        timestamp: DateTime.now(),
-      );
-      await logsBox?.put('mood_$todayKey', moodEntry.toJson());
-    }
-
-    await logsBox?.put('streak', _calculateNextStreak(logsBox));
-    unawaited(_syncService.syncDailyLog(log));
+    await _syncService.syncDailyLog(log);
   }
 
   Future<void> saveHabits(List<HabitProgress> habits) async {
-    final box = await _openBox(AppConstants.habitsBox);
-    await box?.put(todayKey, habits.map((habit) => habit.toJson()).toList());
+    await _syncService.syncHabits(habits);
   }
 
   Future<void> updateTask(String id, bool isCompleted) async {
@@ -120,19 +111,13 @@ class LogRepository {
     );
   }
 
-  int _calculateNextStreak(Box<dynamic>? logsBox) {
-    final current = logsBox?.get('streak', defaultValue: 0) as int? ?? 0;
-    return current == 0 ? 1 : current;
-  }
-
-  Future<Box<dynamic>?> _openBox(String name) async {
-    try {
-      if (Hive.isBoxOpen(name)) {
-        return Hive.box<dynamic>(name);
-      }
-      return await Hive.openBox<dynamic>(name);
-    } on Object {
-      return null;
-    }
+  Future<Map<String, dynamic>> _today() async {
+    final deviceId = await _identityService.getDeviceId();
+    final result = await _edgeClient.invoke(
+      'app-data',
+      payload: {'action': 'today_log', 'device_id': deviceId},
+      headers: {'x-device-id': deviceId},
+    );
+    return result.isSuccess ? result.data ?? const {} : const {};
   }
 }

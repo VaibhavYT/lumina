@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/theme/app_motion.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
+import 'package:lumina/features/auth/data/auth_repository.dart';
 import 'package:lumina/features/dashboard/presentation/providers/dashboard_notifier.dart';
 import 'package:lumina/features/dashboard/presentation/widgets/dashboard_widgets.dart';
 import 'package:lumina/features/dashboard/services/dashboard_greeting_service.dart';
@@ -45,7 +45,13 @@ class DashboardScreen extends ConsumerWidget {
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              _DashboardHeader(state: state),
+              _DashboardHeader(
+                state: state,
+                displayName: ref
+                    .watch(authRepositoryProvider)
+                    .currentDisplayName,
+                initial: ref.watch(authRepositoryProvider).currentInitial,
+              ),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.pagePadding,
@@ -80,15 +86,20 @@ class DashboardScreen extends ConsumerWidget {
                     ],
                     const SizedBox(height: AppSpacing.sectionGap),
                     const SectionTitle('Habit Rhythm'),
+                    if (state.habits.isEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const EmptyHabitRhythmCard(),
+                    ],
                   ],
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.md),
-                  child: HabitRingsRow(habits: state.habits),
+              if (state.habits.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: HabitRingsRow(habits: state.habits),
+                  ),
                 ),
-              ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.pagePadding,
@@ -96,7 +107,9 @@ class DashboardScreen extends ConsumerWidget {
                   AppSpacing.pagePadding,
                   128,
                 ),
-                sliver: SliverList.list(children: const [RecentPatternsCard()]),
+                sliver: SliverList.list(
+                  children: const [RealPatternsLinkCard()],
+                ),
               ),
             ],
           ),
@@ -149,9 +162,15 @@ class _BurnoutNudgeBanner extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.state});
+  const _DashboardHeader({
+    required this.state,
+    required this.displayName,
+    required this.initial,
+  });
 
   final DashboardState state;
+  final String displayName;
+  final String initial;
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +199,7 @@ class _DashboardHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              '$greeting, ${AppConstants.defaultDisplayName}',
+              '$greeting, $displayName',
               style: context.textTheme.headlineMedium,
               overflow: TextOverflow.ellipsis,
             ),
@@ -248,10 +267,7 @@ class _DashboardHeader extends StatelessWidget {
                                   shape: BoxShape.circle,
                                 ),
                                 child: Text(
-                                  AppConstants.defaultDisplayName.substring(
-                                    0,
-                                    1,
-                                  ),
+                                  initial,
                                   style: context.textTheme.labelLarge?.copyWith(
                                     color: context.isDark
                                         ? colors.backgroundPrimary

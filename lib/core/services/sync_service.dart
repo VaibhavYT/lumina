@@ -110,6 +110,37 @@ class SyncService {
     }
   }
 
+  Future<void> syncHabits(List<HabitProgress> habits) async {
+    try {
+      final deviceId = await _identityService.getDeviceId();
+      final result = await _edgeClient.invoke(
+        'sync-daily-log',
+        payload: {
+          'deviceId': deviceId,
+          'habits': [
+            for (final habit in habits)
+              {
+                'habitId': habit.habitId,
+                'name': habit.name,
+                'emoji': habit.emoji,
+                'color_hex':
+                    '#${habit.color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                'frequency': 'daily',
+                'is_active': true,
+              },
+          ],
+        },
+        headers: {'x-device-id': deviceId},
+      );
+      if (!result.isSuccess) {
+        throw StateError(result.error ?? 'Habit sync failed.');
+      }
+    } on Object catch (error) {
+      debugPrint('Lumina syncHabits queued: $error');
+      await _queue('habits', habits.map((habit) => habit.toJson()).toList());
+    }
+  }
+
   Future<List<MentorInsight>> fetchRecentInsights(String deviceId) async {
     try {
       final result = await _edgeClient.invoke(

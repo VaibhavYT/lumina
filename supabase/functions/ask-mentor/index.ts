@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { resolveDeviceForRequest } from "../_shared/agent_utils.ts";
 import { generateGeminiText } from "../_shared/gemini.ts";
-import { adminClient, ensureProfile } from "../_shared/supabase.ts";
+import { adminClient } from "../_shared/supabase.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,16 +12,36 @@ Deno.serve(async (req) => {
   try {
     const payload = await req.json();
     const question = String(payload.question ?? "").trim();
-    const deviceId = String(payload.deviceId ?? req.headers.get("x-device-id") ?? "");
-    if (!question || !deviceId) {
-      return jsonResponse({ error: "deviceId and question are required" }, 400);
+    if (!question) {
+      return jsonResponse({ error: "question is required" }, 400);
     }
 
-    await ensureProfile(deviceId);
+    const supabase = adminClient();
+    if (!supabase) {
+      return jsonResponse({ error: "Supabase service role is not configured" }, 500);
+    }
+    const deviceId = await resolveDeviceForRequest({
+      supabase,
+      req,
+      requestedDeviceId: String(payload.deviceId ?? payload.device_id ?? req.headers.get("x-device-id") ?? ""),
+    });
+    const [{ data: recentLogs }, { data: tasks }, { data: habits }, { data: insights }] =
+      await Promise.all([
+        supabase.from("daily_logs").select("log_date, mood, energy, notes").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(14),
+        supabase.from("tasks").select("log_date, title, is_completed, priority").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(40),
+        supabase.from("habits").select("name, frequency, is_active").eq("device_id", deviceId).eq("is_active", true),
+        supabase.from("mentor_insights").select("insight_type, headline, body, generated_at").eq("device_id", deviceId).eq("is_dismissed", false).order("generated_at", { ascending: false }).limit(8),
+      ]);
     const prompt = `You are Lumina, a warm, wise, direct AI life mentor.
 
 Context:
-${JSON.stringify(payload.context ?? {})}
+${JSON.stringify({
+  recentLogs,
+  recentTasks: tasks,
+  activeHabits: habits,
+  recentInsights: insights,
+  appContext: payload.context ?? {},
+})}
 
 Question: "${question}"
 
@@ -36,16 +57,13 @@ Rules:
       "Start with the smallest next action you can repeat today. The pattern matters less than making it visible, then choosing one honest adjustment.",
     );
 
-    const supabase = adminClient();
-    if (supabase) {
-      await supabase.from("mentor_insights").insert({
-        device_id: deviceId,
-        insight_type: "ask_response",
-        headline: question,
-        body: answer,
-        metadata: { question },
-      });
-    }
+    await supabase.from("mentor_insights").insert({
+      device_id: deviceId,
+      insight_type: "ask_response",
+      headline: question,
+      body: answer,
+      metadata: { question, source: "ask_mentor", contextWindowDays: 14 },
+    });
 
     return jsonResponse({ answer });
   } catch (_error) {

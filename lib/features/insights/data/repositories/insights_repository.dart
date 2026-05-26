@@ -1,10 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:lumina/core/constants/app_constants.dart';
-import 'package:lumina/core/data/lumina_models.dart';
+import 'package:lumina/core/services/device_identity_service.dart';
+import 'package:lumina/core/services/edge_function_client.dart';
 
 enum InsightRange {
   seven(7, '7D'),
@@ -37,6 +36,18 @@ class InsightDay {
   final String notes;
 
   String get weekday => DateFormat('E').format(date);
+
+  factory InsightDay.fromJson(Map<dynamic, dynamic> json) {
+    return InsightDay(
+      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      mood: json['mood'] as int? ?? 0,
+      energy: json['energy'] as int? ?? 0,
+      tasksAdded: json['tasksAdded'] as int? ?? 0,
+      tasksCompleted: json['tasksCompleted'] as int? ?? 0,
+      habitRate: (json['habitRate'] as num?)?.toDouble() ?? 0,
+      notes: json['notes'] as String? ?? '',
+    );
+  }
 }
 
 class EmotionalTrigger {
@@ -51,15 +62,6 @@ class EmotionalTrigger {
   final String sentiment;
   final int frequency;
   final double moodCorrelation;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'tag': tag,
-      'sentiment': sentiment,
-      'frequency': frequency,
-      'moodCorrelation': moodCorrelation,
-    };
-  }
 
   factory EmotionalTrigger.fromJson(Map<dynamic, dynamic> json) {
     return EmotionalTrigger(
@@ -112,71 +114,58 @@ class ProductivitySummary {
 }
 
 class InsightsRepository {
-  InsightsRepository();
+  InsightsRepository({
+    EdgeFunctionClient? edgeClient,
+    DeviceIdentityService? identityService,
+  }) : _edgeClient = edgeClient ?? EdgeFunctionClient(),
+       _identityService = identityService ?? DeviceIdentityService();
 
-  final DateFormat _keyFormat = DateFormat('yyyy-MM-dd');
+  final EdgeFunctionClient _edgeClient;
+  final DeviceIdentityService _identityService;
+  List<EmotionalTrigger> _lastTriggers = const [];
 
   Future<List<InsightDay>> getInsightDays(InsightRange range) async {
-    final logsBox = await _openBox(AppConstants.logsBox);
-    final tasksBox = await _openBox(AppConstants.tasksBox);
-    final habitsBox = await _openBox(AppConstants.habitsBox);
-    final days = <InsightDay>[];
-    final now = DateTime.now();
-
-    for (var i = range.days - 1; i >= 0; i--) {
-      final date = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: i));
-      final key = _keyFormat.format(date);
-      final logMap = logsBox?.get('log_$key');
-      final moodMap = logsBox?.get('mood_$key');
-      final tasksRaw = tasksBox?.get(key);
-      final habitsRaw = habitsBox?.get(key);
-
-      final log = logMap is Map ? DailyLog.fromJson(logMap) : null;
-      final moodEntry = moodMap is Map ? MoodEntry.fromJson(moodMap) : null;
-      final tasks = tasksRaw is List
-          ? tasksRaw
-                .whereType<Map<dynamic, dynamic>>()
-                .map(Task.fromJson)
-                .toList()
-          : <Task>[];
-      final habits = habitsRaw is List
-          ? habitsRaw
-                .whereType<Map<dynamic, dynamic>>()
-                .map(HabitProgress.fromJson)
-                .toList()
-          : <HabitProgress>[];
-
-      days.add(
-        InsightDay(
-          date: date,
-          mood: log?.mood ?? moodEntry?.mood ?? _seedMood(i),
-          energy: log?.energy ?? moodEntry?.energy ?? _seedEnergy(i),
-          tasksAdded: log?.tasks.length ?? tasks.length,
-          tasksCompleted: (log?.tasks ?? tasks)
-              .where((task) => task.isCompleted)
-              .length,
-          habitRate: habits.isEmpty
-              ? _seedHabitRate(i)
-              : habits.map((habit) => habit.progress).reduce((a, b) => a + b) /
-                    habits.length,
-          notes: log?.notes ?? '',
-        ),
-      );
+    final deviceId = await _identityService.getDeviceId();
+    final result = await _edgeClient.invoke(
+      'app-data',
+      payload: {
+        'action': 'insights',
+        'device_id': deviceId,
+        'rangeDays': range.days,
+      },
+      headers: {'x-device-id': deviceId},
+    );
+    if (!result.isSuccess) {
+      _lastTriggers = const [];
+      return const [];
     }
-
-    return days;
+    final data = result.data ?? const {};
+    final triggers = data['triggers'];
+    _lastTriggers = triggers is List
+        ? triggers
+              .whereType<Map<dynamic, dynamic>>()
+              .map(EmotionalTrigger.fromJson)
+              .toList()
+        : const [];
+    final days = data['days'];
+    return days is List
+        ? days
+              .whereType<Map<dynamic, dynamic>>()
+              .map(InsightDay.fromJson)
+              .toList()
+        : const [];
   }
 
   BurnoutAnalysis analyzeBurnout(List<InsightDay> days, AppColorsShim colors) {
     var score = 0;
     final signals = <BurnoutSignal>[];
     final recent = days.takeLast(math.min(days.length, 7)).toList();
-    final lowMoodStreak = _longestStreak(recent.map((day) => day.mood < 3));
-    final lowEnergyStreak = _longestStreak(recent.map((day) => day.energy < 3));
+    final lowMoodStreak = _longestStreak(
+      recent.map((day) => day.mood > 0 && day.mood < 3),
+    );
+    final lowEnergyStreak = _longestStreak(
+      recent.map((day) => day.energy > 0 && day.energy < 3),
+    );
     final habitRate = recent.isEmpty
         ? 1.0
         : recent.map((day) => day.habitRate).reduce((a, b) => a + b) /
@@ -184,12 +173,11 @@ class InsightsRepository {
     final taskRate = recent.isEmpty
         ? 1.0
         : recent
-                  .map((day) {
-                    if (day.tasksAdded == 0) {
-                      return 1.0;
-                    }
-                    return day.tasksCompleted / day.tasksAdded;
-                  })
+                  .map(
+                    (day) => day.tasksAdded == 0
+                        ? 1.0
+                        : day.tasksCompleted / day.tasksAdded,
+                  )
                   .reduce((a, b) => a + b) /
               recent.length;
 
@@ -236,7 +224,9 @@ class InsightsRepository {
     if (signals.isEmpty) {
       signals.add(
         BurnoutSignal(
-          label: 'Recovery rhythm looks stable',
+          label: days.isEmpty
+              ? 'Log data to unlock burnout radar'
+              : 'Recovery rhythm looks stable',
           score: 0,
           color: colors.success,
         ),
@@ -259,15 +249,17 @@ class InsightsRepository {
         averageAdded: 0,
         averageCompleted: 0,
         completionRate: 0,
-        bestDay: 'Mon',
-        challengingDay: 'Fri',
+        bestDay: '-',
+        challengingDay: '-',
       );
     }
 
-    final added = days.map((day) => day.tasksAdded).reduce((a, b) => a + b);
+    final added = days
+        .map((day) => day.tasksAdded)
+        .fold<int>(0, (a, b) => a + b);
     final completed = days
         .map((day) => day.tasksCompleted)
-        .reduce((a, b) => a + b);
+        .fold<int>(0, (a, b) => a + b);
     final grouped = <int, List<InsightDay>>{};
     for (final day in days) {
       grouped.putIfAbsent(day.date.weekday, () => []).add(day);
@@ -276,27 +268,12 @@ class InsightsRepository {
     String labelFor(int weekday) =>
         DateFormat('EEEE').format(DateTime(2024, 1, weekday));
     final sorted = grouped.entries.toList()
-      ..sort((a, b) {
-        double rate(List<InsightDay> source) {
-          final total = source
-              .map((day) => day.tasksAdded)
-              .fold<int>(0, (a, b) => a + b);
-          if (total == 0) {
-            return 1;
-          }
-          return source
-                  .map((day) => day.tasksCompleted)
-                  .fold<int>(0, (a, b) => a + b) /
-              total;
-        }
-
-        return rate(b.value).compareTo(rate(a.value));
-      });
+      ..sort((a, b) => _taskRate(b.value).compareTo(_taskRate(a.value)));
 
     return ProductivitySummary(
       averageAdded: added / days.length,
       averageCompleted: completed / days.length,
-      completionRate: added == 0 ? 1 : completed / added,
+      completionRate: added == 0 ? 0 : completed / added,
       bestDay: labelFor(sorted.first.key),
       challengingDay: labelFor(sorted.last.key),
     );
@@ -305,50 +282,21 @@ class InsightsRepository {
   Future<List<EmotionalTrigger>> getEmotionalTriggers(
     List<InsightDay> days,
   ) async {
-    final box = await _openBox(AppConstants.insightsBox);
-    final cached = box?.get('emotional_triggers_cache');
-    if (cached is Map) {
-      final generatedAt = DateTime.tryParse(
-        cached['generatedAt'] as String? ?? '',
-      );
-      final raw = cached['triggers'];
-      if (generatedAt != null &&
-          DateTime.now().difference(generatedAt).inHours < 24 &&
-          raw is List) {
-        return raw
-            .whereType<Map<dynamic, dynamic>>()
-            .map(EmotionalTrigger.fromJson)
-            .toList();
-      }
-    }
-
-    final triggers = _seedTriggers(days);
-    await box?.put('emotional_triggers_cache', {
-      'generatedAt': DateTime.now().toIso8601String(),
-      'triggers': triggers.map((trigger) => trigger.toJson()).toList(),
-    });
-    return triggers;
+    return _lastTriggers;
   }
 
-  Future<Box<dynamic>?> _openBox(String name) async {
-    try {
-      if (Hive.isBoxOpen(name)) {
-        return Hive.box<dynamic>(name);
-      }
-      return await Hive.openBox<dynamic>(name);
-    } on Object {
-      return null;
+  double _taskRate(List<InsightDay> source) {
+    final total = source
+        .map((day) => day.tasksAdded)
+        .fold<int>(0, (a, b) => a + b);
+    if (total == 0) {
+      return 0;
     }
+    return source
+            .map((day) => day.tasksCompleted)
+            .fold<int>(0, (a, b) => a + b) /
+        total;
   }
-
-  int _seedMood(int offset) =>
-      3 + (math.sin(offset / 2) * 1.4).round().clamp(-2, 2);
-
-  int _seedEnergy(int offset) =>
-      3 + (math.cos(offset / 3) * 1.5).round().clamp(-2, 2);
-
-  double _seedHabitRate(int offset) =>
-      (0.48 + math.sin(offset / 3) * 0.32).clamp(0.05, 1);
 
   int _longestStreak(Iterable<bool> values) {
     var current = 0;
@@ -358,41 +306,6 @@ class InsightsRepository {
       longest = math.max(longest, current);
     }
     return longest;
-  }
-
-  List<EmotionalTrigger> _seedTriggers(List<InsightDay> days) {
-    return const [
-      EmotionalTrigger(
-        tag: 'early focus',
-        sentiment: 'positive',
-        frequency: 8,
-        moodCorrelation: 0.72,
-      ),
-      EmotionalTrigger(
-        tag: 'late messages',
-        sentiment: 'negative',
-        frequency: 6,
-        moodCorrelation: -0.58,
-      ),
-      EmotionalTrigger(
-        tag: 'movement',
-        sentiment: 'positive',
-        frequency: 5,
-        moodCorrelation: 0.49,
-      ),
-      EmotionalTrigger(
-        tag: 'sleep debt',
-        sentiment: 'negative',
-        frequency: 4,
-        moodCorrelation: -0.64,
-      ),
-      EmotionalTrigger(
-        tag: 'quiet planning',
-        sentiment: 'neutral',
-        frequency: 3,
-        moodCorrelation: 0.18,
-      ),
-    ];
   }
 }
 

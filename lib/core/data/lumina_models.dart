@@ -68,10 +68,17 @@ class Task {
     return Task(
       id: json['id'] as String?,
       title: json['title'] as String? ?? '',
-      isCompleted: json['isCompleted'] as bool? ?? false,
+      isCompleted:
+          json['isCompleted'] as bool? ??
+          json['is_completed'] as bool? ??
+          false,
       priority: TaskPriority.fromName(json['priority'] as String?),
-      dueDate: DateTime.tryParse(json['dueDate'] as String? ?? ''),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      dueDate: DateTime.tryParse(
+        json['dueDate'] as String? ?? json['log_date'] as String? ?? '',
+      ),
+      createdAt: DateTime.tryParse(
+        json['createdAt'] as String? ?? json['created_at'] as String? ?? '',
+      ),
     );
   }
 }
@@ -343,9 +350,13 @@ class DailyLog {
 
     return DailyLog(
       id: json['id'] as String?,
-      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      date:
+          DateTime.tryParse(
+            json['date'] as String? ?? json['log_date'] as String? ?? '',
+          ) ??
+          DateTime.now(),
       mood: json['mood'] as int?,
-      moodNote: json['moodNote'] as String?,
+      moodNote: json['moodNote'] as String? ?? json['mood_note'] as String?,
       energy: json['energy'] as int?,
       tasks: rawTasks is List
           ? rawTasks

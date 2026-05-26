@@ -18,6 +18,7 @@ export async function ensureProfile(
   deviceId: string,
   displayName?: string,
   fcmToken?: string,
+  userId?: string,
 ) {
   const supabase = adminClient();
   if (!supabase) {
@@ -27,6 +28,9 @@ export async function ensureProfile(
     device_id: deviceId,
     display_name: displayName ?? null,
   };
+  if (userId) {
+    profile.user_id = userId;
+  }
   if (fcmToken) {
     profile.fcm_token = fcmToken;
   }

@@ -675,8 +675,25 @@ class _HabitRingPainter extends CustomPainter {
   }
 }
 
-class RecentPatternsCard extends StatelessWidget {
-  const RecentPatternsCard({super.key});
+class EmptyHabitRhythmCard extends StatelessWidget {
+  const EmptyHabitRhythmCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return LuminaCard(
+      onTap: () => context.go('/log'),
+      child: Text(
+        'Add habits in your daily log to track real completion rhythm here.',
+        style: context.textTheme.bodyMedium?.copyWith(
+          color: context.colors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class RealPatternsLinkCard extends StatelessWidget {
+  const RealPatternsLinkCard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -691,21 +708,20 @@ class RecentPatternsCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 LuminaTag(
-                  label: 'This Week',
+                  label: 'Insights',
                   color: colors.primaryAccentSoft,
                   textColor: colors.primaryAccent,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Your mood rises after focused mornings',
+                  'Review patterns from your synced logs',
                   style: context.textTheme.bodyLarge,
                 ),
-                const SizedBox(height: AppSpacing.md),
-                const RepaintBoundary(
-                  child: SizedBox(
-                    width: 72,
-                    height: 40,
-                    child: _MiniMoodBars(values: [3, 4, 2, 5, 4]),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Mood, energy, habits, and task trends are calculated from backend data.',
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: colors.textSecondary,
                   ),
                 ),
               ],
@@ -718,62 +734,6 @@ class RecentPatternsCard extends StatelessWidget {
         ],
       ),
     ).animate().fadeIn().slideY(begin: 0.08, end: 0);
-  }
-}
-
-class _MiniMoodBars extends StatelessWidget {
-  const _MiniMoodBars({required this.values});
-
-  final List<int> values;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _MiniMoodBarsPainter(
-        values: values,
-        color: context.colors.secondaryAccent,
-        warningColor: context.colors.warningColor,
-      ),
-    );
-  }
-}
-
-class _MiniMoodBarsPainter extends CustomPainter {
-  const _MiniMoodBarsPainter({
-    required this.values,
-    required this.color,
-    required this.warningColor,
-  });
-
-  final List<int> values;
-  final Color color;
-  final Color warningColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final minValue = values.reduce(math.min);
-    const gap = 4.0;
-    final barWidth = (size.width - gap * (values.length - 1)) / values.length;
-
-    for (var i = 0; i < values.length; i++) {
-      final height = size.height * (values[i] / 5);
-      final left = i * (barWidth + gap);
-      final top = size.height - height;
-      final paint = Paint()
-        ..color = values[i] == minValue ? warningColor : color;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(left, top, barWidth, height),
-        const Radius.circular(4),
-      );
-      canvas.drawRRect(rect, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MiniMoodBarsPainter oldDelegate) {
-    return values != oldDelegate.values ||
-        color != oldDelegate.color ||
-        warningColor != oldDelegate.warningColor;
   }
 }
 

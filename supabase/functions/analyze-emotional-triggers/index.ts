@@ -7,16 +7,15 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const fallback = [
-    { tag: "early focus", sentiment: "positive", frequency: 6, moodCorrelation: 0.62 },
-    { tag: "late messages", sentiment: "negative", frequency: 5, moodCorrelation: -0.55 },
-  ];
-
   try {
     const payload = await req.json();
-    const notes = payload.notes ?? [];
-    const moodData = payload.moodData ?? [];
-    const prompt = `Analyze these journal notes and identify emotional triggers.
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+    const moodData = Array.isArray(payload.moodData) ? payload.moodData : [];
+    if (notes.length < 3 || moodData.length < 3) {
+      return jsonResponse({ triggers: [] });
+    }
+
+    const prompt = `Analyze these real journal notes and identify emotional triggers.
 
 Notes:
 ${JSON.stringify(notes)}
@@ -29,12 +28,12 @@ Return ONLY a JSON array:
   {"tag":"string","sentiment":"positive|negative|neutral","frequency":1,"moodCorrelation":0.0}
 ]`;
 
-    const text = await generateGeminiText(prompt, JSON.stringify(fallback));
+    const text = await generateGeminiText(prompt, "[]");
     const parsed = safeJsonArray(text)
       .filter((item) => typeof item?.tag === "string")
       .slice(0, 12);
-    return jsonResponse({ triggers: parsed.length > 0 ? parsed : fallback });
+    return jsonResponse({ triggers: parsed });
   } catch (_error) {
-    return jsonResponse({ triggers: fallback });
+    return jsonResponse({ triggers: [] });
   }
 });

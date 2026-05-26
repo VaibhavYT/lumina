@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { generateGeminiText, safeJsonObject } from "../_shared/gemini.ts";
-import { adminClient, ensureProfile } from "../_shared/supabase.ts";
+import { adminClient } from "../_shared/supabase.ts";
 import {
   addDays,
   asInteger,
@@ -13,6 +13,7 @@ import {
   errorMessage,
   isoDate,
   parseDate,
+  resolveDeviceForRequest,
 } from "../_shared/agent_utils.ts";
 
 type GoalTask = {
@@ -154,16 +155,14 @@ async function fetchActiveGoal(supabase: any, deviceId: string) {
   };
 }
 
-async function createGoal(supabase: any, payload: Record<string, unknown>) {
-  const deviceId = asString(payload.device_id ?? payload.deviceId);
+async function createGoal(supabase: any, payload: Record<string, unknown>, deviceId: string) {
   const goalTitle = asString(payload.goalTitle);
   const targetDate = asString(payload.targetDate);
   const context = asString(payload.context) ?? "Not provided";
-  if (!deviceId || !goalTitle || !targetDate) {
+  if (!goalTitle || !targetDate) {
     return jsonResponse({ error: "device_id, goalTitle, and targetDate are required" }, 400);
   }
 
-  await ensureProfile(deviceId);
   const today = new Date();
   const target = parseDate(targetDate);
   const weeksAvailable = Math.max(1, Math.min(16, Math.ceil(daysBetween(today, target) / 7)));
@@ -319,11 +318,16 @@ Deno.serve(async (req) => {
 
   try {
     const payload = asRecord(await req.json().catch(() => ({}))) ?? {};
-    const deviceId = asString(payload.device_id ?? payload.deviceId);
     const supabase = adminClient();
     if (!supabase) {
       return jsonResponse({ error: "Supabase service role is not configured" }, 500);
     }
+
+    const deviceId = await resolveDeviceForRequest({
+      supabase,
+      req,
+      requestedDeviceId: asString(payload.device_id ?? payload.deviceId),
+    });
 
     const action = asString(payload.action);
     if (action === "active_goal") {
@@ -355,7 +359,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ tasks: state.todaysTasks ?? [] });
     }
 
-    return await createGoal(supabase, payload);
+    return await createGoal(supabase, payload, deviceId);
   } catch (error) {
     return jsonResponse({ error: errorMessage(error) }, 500);
   }

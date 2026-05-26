@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { adminClient, ensureProfile } from "../_shared/supabase.ts";
+import { resolveDeviceForRequest } from "../_shared/agent_utils.ts";
+import { adminClient } from "../_shared/supabase.ts";
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
@@ -22,11 +23,6 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json() as Record<string, unknown>;
-    const deviceId = asString(payload.deviceId) ??
-      asString(req.headers.get("x-device-id"));
-    if (!deviceId) {
-      return jsonResponse({ error: "deviceId is required" }, 400);
-    }
 
     const supabase = adminClient();
     if (!supabase) {
@@ -35,7 +31,13 @@ Deno.serve(async (req) => {
       }, 500);
     }
 
-    await ensureProfile(deviceId);
+    const deviceId = await resolveDeviceForRequest({
+      supabase,
+      req,
+      requestedDeviceId: asString(payload.deviceId) ??
+        asString(payload.device_id) ??
+        asString(req.headers.get("x-device-id")),
+    });
     if (payload.action === "dismiss") {
       const insightId = asString(payload.insightId);
       if (!insightId) {

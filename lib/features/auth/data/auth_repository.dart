@@ -18,6 +18,24 @@ class AuthRepository {
 
   User? get currentUser => currentSession?.user;
 
+  String get currentDisplayName {
+    final user = currentUser;
+    final metadataName = user?.userMetadata?['display_name'];
+    if (metadataName is String && metadataName.trim().isNotEmpty) {
+      return metadataName.trim();
+    }
+    final email = user?.email;
+    if (email != null && email.contains('@')) {
+      return email.split('@').first;
+    }
+    return 'friend';
+  }
+
+  String get currentInitial {
+    final name = currentDisplayName.trim();
+    return name.isEmpty ? 'L' : name.substring(0, 1).toUpperCase();
+  }
+
   Stream<AuthState> get authStateChanges {
     if (!isAvailable) {
       return const Stream.empty();

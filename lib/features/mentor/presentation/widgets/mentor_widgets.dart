@@ -212,7 +212,7 @@ class DailyReflectionCard extends StatelessWidget {
                 onPressed: () {},
                 child: const Text('Save to Journal'),
               ),
-              TextButton(onPressed: () {}, child: const Text('Go Deeper ->')),
+              TextButton(onPressed: () {}, child: const Text('Go Deeper')),
             ],
           ),
         ],
@@ -319,7 +319,7 @@ class CoachingCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Today’s Action:',
+                      "Today's Action:",
                       style: context.textTheme.labelSmall,
                     ),
                     const SizedBox(height: 4),
@@ -330,7 +330,7 @@ class CoachingCard extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     LuminaButton(
                       label: mission.doneToday
-                          ? 'Done Today ✓'
+                          ? 'Done Today'
                           : 'Done for Today',
                       outlined: mission.doneToday,
                       onPressed: onToggleDone,
@@ -360,6 +360,25 @@ class _WeeklyPlanSectionState extends State<WeeklyPlanSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.plan.isEmpty) {
+      return LuminaCard(
+        borderRadius: AppRadius.radiusXl,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your Week Ahead', style: context.textTheme.headlineMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Add a few daily logs to generate a real weekly plan.',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: context.colors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return LuminaCard(
       borderRadius: AppRadius.radiusXl,
       onTap: () => setState(() => _expanded = !_expanded),
@@ -482,16 +501,26 @@ class InsightFeed extends StatelessWidget {
       children: [
         Text('Insight Feed', style: context.textTheme.headlineMedium),
         const SizedBox(height: AppSpacing.md),
-        for (final insight in insights)
-          Dismissible(
-            key: ValueKey(insight.id),
-            direction: DismissDirection.startToEnd,
-            onDismissed: (_) => onDismiss(insight.id),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _InsightCard(insight: insight, onDismiss: onDismiss),
+        if (insights.isEmpty)
+          LuminaCard(
+            child: Text(
+              'Insights will appear here after your logs and mentor runs create real patterns.',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: context.colors.textSecondary,
+              ),
             ),
-          ),
+          )
+        else
+          for (final insight in insights)
+            Dismissible(
+              key: ValueKey(insight.id),
+              direction: DismissDirection.startToEnd,
+              onDismissed: (_) => onDismiss(insight.id),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: _InsightCard(insight: insight, onDismiss: onDismiss),
+              ),
+            ),
       ],
     );
   }

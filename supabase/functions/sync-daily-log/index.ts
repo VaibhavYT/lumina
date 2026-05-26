@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { jsonHeaders } from "../_shared/agent_utils.ts";
-import { adminClient, ensureProfile } from "../_shared/supabase.ts";
+import { jsonHeaders, resolveDeviceForRequest } from "../_shared/agent_utils.ts";
+import { adminClient } from "../_shared/supabase.ts";
 
 type PayloadRecord = Record<string, unknown>;
 
@@ -73,12 +73,6 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json() as PayloadRecord;
-    const deviceId = asString(payload.deviceId) ??
-      asString(req.headers.get("x-device-id"));
-    if (!deviceId) {
-      return jsonResponse({ error: "deviceId is required" }, 400);
-    }
-
     const supabase = adminClient();
     if (!supabase) {
       return jsonResponse({
@@ -87,17 +81,22 @@ Deno.serve(async (req) => {
     }
 
     const profile = asRecord(payload.profile);
-    await ensureProfile(
-      deviceId,
-      asString(profile?.display_name),
-      asString(profile?.fcm_token),
-    );
+    const deviceId = await resolveDeviceForRequest({
+      supabase,
+      req,
+      requestedDeviceId: asString(payload.deviceId) ??
+        asString(payload.device_id) ??
+        asString(req.headers.get("x-device-id")),
+      displayName: asString(profile?.display_name),
+      fcmToken: asString(profile?.fcm_token),
+    });
 
     const today = new Date().toISOString().slice(0, 10);
     const dailyLog = asRecord(payload.dailyLog);
     const logDate = asDateString(dailyLog?.log_date ?? payload.logDate, today);
-    const completedHabitIds = Array.isArray(payload.completedHabitIds)
-      ? payload.completedHabitIds.map(asString).filter(isString)
+    const hasCompletedHabitSnapshot = Array.isArray(payload.completedHabitIds);
+    const completedHabitIds = hasCompletedHabitSnapshot
+      ? (payload.completedHabitIds as unknown[]).map(asString).filter(isString)
       : [];
 
     if (dailyLog) {
@@ -141,11 +140,72 @@ Deno.serve(async (req) => {
       })
       .filter(isRecord);
 
+    if (Array.isArray(payload.tasks)) {
+      const taskIds = taskRows.map((row) => asString(row.id)).filter(isString);
+      let deleteQuery = supabase.from("tasks")
+        .delete()
+        .eq("device_id", deviceId)
+        .eq("log_date", logDate);
+      if (taskIds.length > 0) {
+        deleteQuery = deleteQuery.not("id", "in", `(${taskIds.join(",")})`);
+      }
+      const { error } = await deleteQuery;
+      if (error) {
+        throw new Error(`tasks snapshot delete failed: ${error.message}`);
+      }
+    }
+
     if (taskRows.length > 0) {
       const { error } = await supabase.from("tasks")
         .upsert(taskRows, { onConflict: "id" });
       if (error) {
         throw new Error(`tasks upsert failed: ${error.message}`);
+      }
+    }
+
+    const habitRows = (Array.isArray(payload.habits) ? payload.habits : [])
+      .map((value, index) => {
+        const habit = asRecord(value);
+        if (!habit) {
+          return null;
+        }
+        const name = asString(habit.name);
+        if (!name) {
+          return null;
+        }
+        const row: PayloadRecord = {
+          device_id: deviceId,
+          name,
+          emoji: asString(habit.emoji),
+          color_hex: asString(habit.color_hex ?? habit.colorHex),
+          frequency: asString(habit.frequency) ?? "daily",
+          is_active: habit.is_active ?? habit.isActive ?? true,
+        };
+        const id = ensureUuid(habit.id ?? habit.habit_id ?? habit.habitId);
+        if (id) {
+          row.id = id;
+        } else {
+          row.local_habit_id = asString(habit.habit_id ?? habit.habitId ?? habit.id) ??
+            `habit-${index}`;
+        }
+        return row;
+      })
+      .filter(isRecord);
+
+    const uuidHabitRows = habitRows.filter((row) => row.id);
+    const localHabitRows = habitRows.filter((row) => row.local_habit_id);
+    if (uuidHabitRows.length > 0) {
+      const { error } = await supabase.from("habits")
+        .upsert(uuidHabitRows, { onConflict: "id" });
+      if (error) {
+        throw new Error(`habit UUID upsert failed: ${error.message}`);
+      }
+    }
+    for (const row of localHabitRows) {
+      const { error } = await supabase.from("habits")
+        .upsert(row, { onConflict: "device_id,local_habit_id" });
+      if (error) {
+        throw new Error(`habit local upsert failed: ${error.message}`);
       }
     }
 
@@ -155,6 +215,19 @@ Deno.serve(async (req) => {
         habit_id: habitId,
         completion_date: logDate,
       }));
+
+    if (hasCompletedHabitSnapshot) {
+      const { error: deleteSnapshotError } = await supabase
+        .from("habit_completions")
+        .delete()
+        .eq("device_id", deviceId)
+        .eq("completion_date", logDate);
+      if (deleteSnapshotError) {
+        throw new Error(
+          `habit completion snapshot delete failed: ${deleteSnapshotError.message}`,
+        );
+      }
+    }
 
     const uuidCompletionRows: PayloadRecord[] = [];
     const localCompletionRows: PayloadRecord[] = [];

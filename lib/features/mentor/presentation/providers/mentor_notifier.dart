@@ -12,28 +12,30 @@ final mentorNotifierProvider =
 class MentorState {
   const MentorState({
     required this.dailyReflection,
-    required this.coachingMission,
     required this.weeklyPlan,
     required this.insightFeed,
+    this.coachingMission,
     this.isAsking = false,
   });
 
   final MentorInsight dailyReflection;
-  final CoachingMission coachingMission;
+  final CoachingMission? coachingMission;
   final List<WeeklyPlanDay> weeklyPlan;
   final List<MentorInsight> insightFeed;
   final bool isAsking;
 
   MentorState copyWith({
     MentorInsight? dailyReflection,
-    CoachingMission? coachingMission,
+    Object? coachingMission = _unchanged,
     List<WeeklyPlanDay>? weeklyPlan,
     List<MentorInsight>? insightFeed,
     bool? isAsking,
   }) {
     return MentorState(
       dailyReflection: dailyReflection ?? this.dailyReflection,
-      coachingMission: coachingMission ?? this.coachingMission,
+      coachingMission: coachingMission == _unchanged
+          ? this.coachingMission
+          : coachingMission as CoachingMission?,
       weeklyPlan: weeklyPlan ?? this.weeklyPlan,
       insightFeed: insightFeed ?? this.insightFeed,
       isAsking: isAsking ?? this.isAsking,
@@ -46,7 +48,7 @@ class MentorNotifier extends AsyncNotifier<MentorState> {
 
   @override
   Future<MentorState> build() async {
-    final results = await Future.wait<Object>([
+    final results = await Future.wait<Object?>([
       _repository.getDailyReflection(),
       _repository.getCoachingMission(),
       _repository.getWeeklyPlan(),
@@ -54,7 +56,7 @@ class MentorNotifier extends AsyncNotifier<MentorState> {
     ]);
     return MentorState(
       dailyReflection: results[0] as MentorInsight,
-      coachingMission: results[1] as CoachingMission,
+      coachingMission: results[1] as CoachingMission?,
       weeklyPlan: results[2] as List<WeeklyPlanDay>,
       insightFeed: results[3] as List<MentorInsight>,
     );
@@ -95,10 +97,14 @@ class MentorNotifier extends AsyncNotifier<MentorState> {
     if (current == null) {
       return;
     }
-    final next = current.coachingMission.copyWith(
-      doneToday: !current.coachingMission.doneToday,
-    );
+    final mission = current.coachingMission;
+    if (mission == null) {
+      return;
+    }
+    final next = mission.copyWith(doneToday: !mission.doneToday);
     await _repository.setCoachingDone(next.doneToday);
     state = AsyncData(current.copyWith(coachingMission: next));
   }
 }
+
+const _unchanged = Object();

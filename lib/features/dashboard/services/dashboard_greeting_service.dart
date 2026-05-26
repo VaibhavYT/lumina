@@ -1,11 +1,10 @@
 import 'package:intl/intl.dart';
-import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/data/lumina_models.dart';
 
 class DashboardGreetingService {
   const DashboardGreetingService();
 
-  String greeting({String name = AppConstants.defaultDisplayName}) {
+  String greeting({String name = 'friend'}) {
     final hour = DateTime.now().hour;
     if (hour >= 5 && hour < 12) {
       return 'Good Morning';

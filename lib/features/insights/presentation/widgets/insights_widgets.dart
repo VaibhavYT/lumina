@@ -326,6 +326,25 @@ class EnergyPatternsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (days.isEmpty) {
+      return LuminaCard(
+        borderRadius: AppRadius.radiusXl,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Energy Patterns', style: context.textTheme.headlineMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Log energy for a few days to reveal your real weekly rhythm.',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: context.colors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final grouped = List.generate(7, (index) => <int>[]);
     for (final day in days) {
       grouped[day.date.weekday - 1].add(day.energy);
@@ -375,7 +394,7 @@ class EnergyPatternsCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  'Your energy peaks on ${DateFormat('EEEE').format(DateTime(2024, 1, bestIndex + 1))}. Consider scheduling deep work then.',
+                  'Your energy has been strongest on ${DateFormat('EEEE').format(DateTime(2024, 1, bestIndex + 1))} in this range.',
                   style: context.textTheme.bodyMedium?.copyWith(
                     color: context.colors.textSecondary,
                   ),
@@ -972,11 +991,12 @@ class NotableStreaksRow extends StatelessWidget {
         .map((day) => day.tasksCompleted)
         .fold<int>(0, (a, b) => a + b);
     final goodMoodDays = days.where((day) => day.mood >= 4).length;
+    final loggingStreak = _currentLoggingStreak(days);
 
     final cards = [
       (
         '🔥',
-        '${math.min(days.length, 12)}',
+        '$loggingStreak',
         'Day Logging Streak',
         context.colors.primaryAccent,
       ),
@@ -1028,6 +1048,22 @@ class NotableStreaksRow extends StatelessWidget {
       ),
     );
   }
+}
+
+int _currentLoggingStreak(List<InsightDay> days) {
+  final dates = days
+      .map(
+        (day) =>
+            DateUtils.dateOnly(day.date).toIso8601String().substring(0, 10),
+      )
+      .toSet();
+  var cursor = DateUtils.dateOnly(DateTime.now());
+  var streak = 0;
+  while (dates.contains(cursor.toIso8601String().substring(0, 10))) {
+    streak += 1;
+    cursor = cursor.subtract(const Duration(days: 1));
+  }
+  return streak;
 }
 
 String _moodEmoji(int mood) {

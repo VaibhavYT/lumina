@@ -43,11 +43,13 @@ class MentorScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.sectionGap),
                       DailyReflectionCard(insight: state.dailyReflection),
                       const SizedBox(height: AppSpacing.sectionGap),
-                      CoachingCard(
-                        mission: state.coachingMission,
-                        onToggleDone: notifier.toggleCoachingDone,
-                      ),
-                      const SizedBox(height: AppSpacing.sectionGap),
+                      if (state.coachingMission != null) ...[
+                        CoachingCard(
+                          mission: state.coachingMission!,
+                          onToggleDone: notifier.toggleCoachingDone,
+                        ),
+                        const SizedBox(height: AppSpacing.sectionGap),
+                      ],
                       WeeklyPlanSection(plan: state.weeklyPlan),
                       const SizedBox(height: AppSpacing.sectionGap),
                       InsightFeed(

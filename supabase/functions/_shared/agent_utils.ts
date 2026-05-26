@@ -187,3 +187,111 @@ export function jsonHeaders(serviceKey?: string | null) {
     ...(serviceKey ? { Authorization: `Bearer ${serviceKey}` } : {}),
   };
 }
+
+function base64UrlDecode(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return atob(padded);
+}
+
+export function authClaims(req: Request): JsonRecord | null {
+  const header = req.headers.get("authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  const payload = token.split(".")[1];
+  if (!payload) {
+    return null;
+  }
+  try {
+    return JSON.parse(base64UrlDecode(payload)) as JsonRecord;
+  } catch (_error) {
+    return null;
+  }
+}
+
+export function isServiceRoleRequest(req: Request): boolean {
+  return authClaims(req)?.role === "service_role";
+}
+
+export async function resolveDeviceForRequest({
+  supabase,
+  req,
+  requestedDeviceId,
+  displayName,
+  fcmToken,
+}: {
+  supabase: any;
+  req: Request;
+  requestedDeviceId?: string | null;
+  displayName?: string | null;
+  fcmToken?: string | null;
+}): Promise<string> {
+  const claims = authClaims(req);
+  const userId = asString(claims?.sub);
+
+  if (claims?.role === "service_role") {
+    const deviceId = asString(requestedDeviceId);
+    if (!deviceId) {
+      throw new Error("device_id is required for service role requests");
+    }
+    return deviceId;
+  }
+
+  if (!userId) {
+    throw new Error("A signed-in user session is required");
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("profiles")
+    .select("device_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) {
+    throw new Error(`profile lookup failed: ${existingError.message}`);
+  }
+  if (existing?.device_id) {
+    const update: JsonRecord = {};
+    if (displayName) {
+      update.display_name = displayName;
+    }
+    if (fcmToken) {
+      update.fcm_token = fcmToken;
+    }
+    if (Object.keys(update).length > 0) {
+      await supabase.from("profiles").update(update).eq("device_id", existing.device_id);
+    }
+    return existing.device_id;
+  }
+
+  const deviceId = asString(requestedDeviceId) ?? userId;
+  const { data: deviceProfile, error: deviceError } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("device_id", deviceId)
+    .maybeSingle();
+  if (deviceError) {
+    throw new Error(`device profile lookup failed: ${deviceError.message}`);
+  }
+  if (deviceProfile?.user_id && deviceProfile.user_id !== userId) {
+    throw new Error("device_id already belongs to another user");
+  }
+
+  const profile: JsonRecord = {
+    device_id: deviceId,
+    user_id: userId,
+  };
+  if (displayName) {
+    profile.display_name = displayName;
+  }
+  if (fcmToken) {
+    profile.fcm_token = fcmToken;
+  }
+
+  const { error: upsertError } = await supabase
+    .from("profiles")
+    .upsert(profile, { onConflict: "device_id" });
+  if (upsertError) {
+    throw new Error(`profile upsert failed: ${upsertError.message}`);
+  }
+
+  return deviceId;
+}
