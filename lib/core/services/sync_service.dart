@@ -141,11 +141,17 @@ class SyncService {
     }
   }
 
-  Future<List<MentorInsight>> fetchRecentInsights(String deviceId) async {
+  Future<List<MentorInsight>> fetchRecentInsights(
+    String deviceId, {
+    DateTime? date,
+  }) async {
     try {
       final result = await _edgeClient.invoke(
         'fetch-mentor-insights',
-        payload: {'deviceId': deviceId},
+        payload: {
+          'deviceId': deviceId,
+          if (date != null) 'date': _dateFormat.format(date),
+        },
         headers: {'x-device-id': deviceId},
       );
       if (!result.isSuccess) {

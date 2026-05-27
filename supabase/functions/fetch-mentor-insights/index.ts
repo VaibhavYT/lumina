@@ -16,6 +16,17 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+function dateRange(value: unknown): { start: string; end: string } | null {
+  const date = asString(value);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null;
+  }
+  const start = new Date(`${date}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -54,13 +65,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true });
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("mentor_insights")
       .select("id, insight_type, headline, body, metadata, generated_at")
       .eq("device_id", deviceId)
       .eq("is_dismissed", false)
-      .order("generated_at", { ascending: false })
-      .limit(30);
+      .order("generated_at", { ascending: false });
+
+    const range = dateRange(payload.date);
+    if (range) {
+      query = query.gte("generated_at", range.start).lt("generated_at", range.end);
+    } else {
+      query = query.limit(30);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(error.message);

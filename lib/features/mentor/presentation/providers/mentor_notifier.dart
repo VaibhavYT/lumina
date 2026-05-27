@@ -14,22 +14,25 @@ class MentorState {
     required this.dailyReflection,
     required this.weeklyPlan,
     required this.insightFeed,
+    required this.selectedDate,
     this.coachingMission,
-    this.isAsking = false,
+    this.isFeedLoading = false,
   });
 
   final MentorInsight dailyReflection;
   final CoachingMission? coachingMission;
   final List<WeeklyPlanDay> weeklyPlan;
   final List<MentorInsight> insightFeed;
-  final bool isAsking;
+  final DateTime selectedDate;
+  final bool isFeedLoading;
 
   MentorState copyWith({
     MentorInsight? dailyReflection,
     Object? coachingMission = _unchanged,
     List<WeeklyPlanDay>? weeklyPlan,
     List<MentorInsight>? insightFeed,
-    bool? isAsking,
+    DateTime? selectedDate,
+    bool? isFeedLoading,
   }) {
     return MentorState(
       dailyReflection: dailyReflection ?? this.dailyReflection,
@@ -38,13 +41,15 @@ class MentorState {
           : coachingMission as CoachingMission?,
       weeklyPlan: weeklyPlan ?? this.weeklyPlan,
       insightFeed: insightFeed ?? this.insightFeed,
-      isAsking: isAsking ?? this.isAsking,
+      selectedDate: selectedDate ?? this.selectedDate,
+      isFeedLoading: isFeedLoading ?? this.isFeedLoading,
     );
   }
 }
 
 class MentorNotifier extends AsyncNotifier<MentorState> {
   MentorRepository get _repository => ref.read(mentorRepositoryProvider);
+  DateTime _selectedDate = _dateOnly(DateTime.now());
 
   @override
   Future<MentorState> build() async {
@@ -52,27 +57,37 @@ class MentorNotifier extends AsyncNotifier<MentorState> {
       _repository.getDailyReflection(),
       _repository.getCoachingMission(),
       _repository.getWeeklyPlan(),
-      _repository.getInsightFeed(),
+      _repository.getInsightFeed(date: _selectedDate),
     ]);
     return MentorState(
       dailyReflection: results[0] as MentorInsight,
       coachingMission: results[1] as CoachingMission?,
       weeklyPlan: results[2] as List<WeeklyPlanDay>,
       insightFeed: results[3] as List<MentorInsight>,
+      selectedDate: _selectedDate,
     );
   }
 
-  Future<void> ask(String question) async {
+  Future<void> selectDate(DateTime date) async {
     final current = state.valueOrNull;
-    if (current == null || question.trim().isEmpty) {
+    final nextDate = _dateOnly(date);
+    if (current == null ||
+        current.selectedDate.year == nextDate.year &&
+            current.selectedDate.month == nextDate.month &&
+            current.selectedDate.day == nextDate.day) {
       return;
     }
-    state = AsyncData(current.copyWith(isAsking: true));
-    final insight = await _repository.askMentor(question.trim());
+    _selectedDate = nextDate;
     state = AsyncData(
-      current.copyWith(
-        isAsking: false,
-        insightFeed: [insight, ...current.insightFeed],
+      current.copyWith(selectedDate: nextDate, isFeedLoading: true),
+    );
+    final feed = await _repository.getInsightFeed(date: nextDate);
+    final latest = state.valueOrNull ?? current;
+    state = AsyncData(
+      latest.copyWith(
+        selectedDate: nextDate,
+        insightFeed: feed,
+        isFeedLoading: false,
       ),
     );
   }
@@ -108,3 +123,5 @@ class MentorNotifier extends AsyncNotifier<MentorState> {
 }
 
 const _unchanged = Object();
+
+DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);

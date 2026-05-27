@@ -61,6 +61,28 @@ class CoachingMission {
   }
 }
 
+enum MentorChatRole { user, assistant }
+
+class MentorChatMessage {
+  MentorChatMessage({
+    required this.role,
+    required this.content,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final MentorChatRole role;
+  final String content;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toPayload() {
+    return {
+      'role': role == MentorChatRole.assistant ? 'assistant' : 'user',
+      'content': content,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+}
+
 class MentorRepository {
   MentorRepository({
     EdgeFunctionClient? edgeClient,
@@ -93,9 +115,9 @@ class MentorRepository {
     );
   }
 
-  Future<List<MentorInsight>> getInsightFeed() async {
+  Future<List<MentorInsight>> getInsightFeed({DateTime? date}) async {
     final id = await deviceId;
-    return _syncService.fetchRecentInsights(id);
+    return _syncService.fetchRecentInsights(id, date: date);
   }
 
   Future<List<WeeklyPlanDay>> getWeeklyPlan() async {
@@ -159,25 +181,28 @@ class MentorRepository {
     );
   }
 
-  Future<MentorInsight> askMentor(String question) async {
+  Future<MentorChatMessage> sendChatMessage({
+    required String question,
+    required String sessionId,
+    required List<MentorChatMessage> history,
+  }) async {
     final id = await deviceId;
     final result = await _edgeClient.invoke(
       'ask-mentor',
       payload: {
         'deviceId': id,
+        'sessionId': sessionId,
         'question': question,
-        'context': {'source': 'lumina_app'},
+        'history': history.map((message) => message.toPayload()).toList(),
+        'context': {'source': 'lumina_chat'},
       },
       headers: {'x-device-id': id},
     );
     final answer = result.data?['answer'] as String?;
-    return MentorInsight(
-      headline: question,
-      body: answer?.trim().isNotEmpty == true
-          ? answer!.trim()
-          : 'I could not reach the mentor service. Try again after your latest log syncs.',
-      insightType: 'ask_response',
-    );
+    final content = answer?.trim().isNotEmpty == true
+        ? answer!.trim()
+        : 'I could not reach the mentor service. Try again after your latest log syncs.';
+    return MentorChatMessage(role: MentorChatRole.assistant, content: content);
   }
 
   Future<void> dismissInsight(String id) async {

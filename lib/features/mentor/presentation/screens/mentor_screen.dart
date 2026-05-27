@@ -52,14 +52,21 @@ class MentorScreen extends ConsumerWidget {
                       ],
                       WeeklyPlanSection(plan: state.weeklyPlan),
                       const SizedBox(height: AppSpacing.sectionGap),
+                      MentorDateFilter(
+                        selectedDate: state.selectedDate,
+                        onDateSelected: notifier.selectDate,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                       InsightFeed(
                         insights: state.insightFeed,
+                        selectedDate: state.selectedDate,
+                        isLoading: state.isFeedLoading,
                         onDismiss: notifier.dismiss,
                       ),
                       const SizedBox(height: AppSpacing.sectionGap),
                       AskMentorComposer(
-                        isLoading: state.isAsking,
-                        onSend: notifier.ask,
+                        onSubmit: (question) =>
+                            _openMentorChat(context, ref, question),
                       ),
                     ],
                   ),
@@ -71,6 +78,25 @@ class MentorScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _openMentorChat(BuildContext context, WidgetRef ref, String question) {
+  final trimmed = question.trim();
+  if (trimmed.isEmpty) {
+    return;
+  }
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      return MentorChatSheet(
+        initialQuestion: trimmed,
+        repository: ref.read(mentorRepositoryProvider),
+      );
+    },
+  );
 }
 
 class _MentorLoading extends StatelessWidget {
