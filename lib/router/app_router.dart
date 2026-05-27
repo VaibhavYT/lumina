@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumina/features/agents/presentation/screens/agents_screen.dart';
 import 'package:lumina/features/auth/data/auth_repository.dart';
 import 'package:lumina/features/auth/presentation/screens/auth_screen.dart';
 import 'package:lumina/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -86,6 +87,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/mentor',
             pageBuilder: (context, state) =>
                 fadeSlidePage(key: state.pageKey, child: const MentorScreen()),
+          ),
+          GoRoute(
+            path: '/agents',
+            pageBuilder: (context, state) =>
+                fadeSlidePage(key: state.pageKey, child: const AgentsScreen()),
           ),
           GoRoute(
             path: '/settings',

@@ -22,7 +22,12 @@ type GoalTask = {
   dayOffset: number;
 };
 
-function fallbackPlan(goalTitle: string, targetDate: string, weeksAvailable: number) {
+function requestDate(value: unknown): string {
+  const raw = asString(value);
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : isoDate();
+}
+
+function fallbackPlan(goalTitle: string, targetDate: string, weeksAvailable: number, today: Date) {
   const milestones = Array.from({ length: weeksAvailable }, (_, index) => {
     const week = index + 1;
     return {
@@ -32,7 +37,7 @@ function fallbackPlan(goalTitle: string, targetDate: string, weeksAvailable: num
         week === weeksAvailable
           ? `Complete the final version of ${goalTitle} and review what worked.`
           : `Make steady progress on ${goalTitle} with a small repeatable rhythm.`,
-      targetDate: isoDate(addDays(new Date(), week * 7 - 1)),
+      targetDate: isoDate(addDays(today, week * 7 - 1)),
     };
   });
   return {
@@ -68,7 +73,7 @@ function fallbackPlan(goalTitle: string, targetDate: string, weeksAvailable: num
   };
 }
 
-function validatePlan(parsed: Record<string, unknown>, fallback: ReturnType<typeof fallbackPlan>) {
+function validatePlan(parsed: Record<string, unknown>, fallback: ReturnType<typeof fallbackPlan>, today: Date) {
   const phases = Array.isArray(parsed.phases) ? parsed.phases.map(asRecord).filter(Boolean) : fallback.phases;
   const weeklyMilestones = Array.isArray(parsed.weeklyMilestones)
     ? parsed.weeklyMilestones.map(asRecord).filter(Boolean)
@@ -88,7 +93,7 @@ function validatePlan(parsed: Record<string, unknown>, fallback: ReturnType<type
       weekNumber: asInteger(milestone?.weekNumber, index + 1),
       milestoneTitle: asString(milestone?.milestoneTitle) ?? `Week ${index + 1}`,
       description: asString(milestone?.description) ?? "Complete the weekly milestone.",
-      targetDate: asString(milestone?.targetDate) ?? isoDate(addDays(new Date(), (index + 1) * 7 - 1)),
+      targetDate: asString(milestone?.targetDate) ?? isoDate(addDays(today, (index + 1) * 7 - 1)),
     })),
     dailyTasksByWeek: dailyTasksByWeek.map((week, index) => ({
       weekNumber: asInteger(week?.weekNumber, index + 1),
@@ -104,7 +109,7 @@ function validatePlan(parsed: Record<string, unknown>, fallback: ReturnType<type
   };
 }
 
-async function fetchActiveGoal(supabase: any, deviceId: string) {
+async function fetchActiveGoal(supabase: any, deviceId: string, todayDate: string) {
   const { data: goal, error } = await supabase.from("goals")
     .select("id, title, description, target_date, status, health_score, created_at")
     .eq("device_id", deviceId)
@@ -127,7 +132,7 @@ async function fetchActiveGoal(supabase: any, deviceId: string) {
     supabase.from("tasks")
       .select("id, title, priority, is_completed, log_date")
       .eq("goal_id", goal.id)
-      .eq("log_date", isoDate())
+      .eq("log_date", todayDate)
       .order("sort_order", { ascending: true }),
   ]);
   const totalTasks = tasks?.length ?? 0;
@@ -159,11 +164,12 @@ async function createGoal(supabase: any, payload: Record<string, unknown>, devic
   const goalTitle = asString(payload.goalTitle);
   const targetDate = asString(payload.targetDate);
   const context = asString(payload.context) ?? "Not provided";
+  const todayDate = requestDate(payload.todayDate ?? payload.date);
   if (!goalTitle || !targetDate) {
     return jsonResponse({ error: "device_id, goalTitle, and targetDate are required" }, 400);
   }
 
-  const today = new Date();
+  const today = parseDate(todayDate);
   const target = parseDate(targetDate);
   const weeksAvailable = Math.max(1, Math.min(16, Math.ceil(daysBetween(today, target) / 7)));
   const since = isoDate(addDays(today, -13));
@@ -174,7 +180,7 @@ async function createGoal(supabase: any, payload: Record<string, unknown>, devic
   const avgMood = average((logs ?? []).map((log: any) => log.mood ?? 0).filter((value: number) => value > 0));
   const avgEnergy = average((logs ?? []).map((log: any) => log.energy ?? 0).filter((value: number) => value > 0));
   const habitNames = (habits ?? []).map((habit: any) => habit.name).filter(Boolean).join(", ") || "None tracked";
-  const fallback = fallbackPlan(goalTitle, targetDate, weeksAvailable);
+  const fallback = fallbackPlan(goalTitle, targetDate, weeksAvailable, today);
   const prompt = `You are Lumina, an AI life mentor. A user has set a goal and you must create a complete, phased action plan for them.
 
 Goal: "${goalTitle}"
@@ -234,7 +240,7 @@ Rules:
   let plan = fallback;
   try {
     const text = await generateGeminiText(prompt, JSON.stringify(fallback), { maxOutputTokens: 3000, temperature: 0.58 });
-    plan = validatePlan(safeJsonObject(text), fallback);
+    plan = validatePlan(safeJsonObject(text), fallback, today);
   } catch (error) {
     console.error("goal-decomposition-agent Gemini parse failed", deviceId, error);
   }
@@ -305,7 +311,7 @@ Rules:
     goalId: goal.id,
     milestonesCreated: milestones.length,
     tasksCreated: taskRows.length,
-    todayTasks: taskRows.filter((task) => task.log_date === isoDate()),
+    todayTasks: taskRows.filter((task) => task.log_date === todayDate),
     goalSummary: plan.goalSummary,
     phases: plan.phases,
   });
@@ -330,11 +336,12 @@ Deno.serve(async (req) => {
     });
 
     const action = asString(payload.action);
+    const todayDate = requestDate(payload.todayDate ?? payload.date);
     if (action === "active_goal") {
       if (!deviceId) {
         return jsonResponse({ error: "device_id is required" }, 400);
       }
-      return jsonResponse(await fetchActiveGoal(supabase, deviceId));
+      return jsonResponse(await fetchActiveGoal(supabase, deviceId, todayDate));
     }
     if (action === "goal_milestones") {
       const goalId = asString(payload.goalId);
@@ -355,7 +362,7 @@ Deno.serve(async (req) => {
       if (!deviceId) {
         return jsonResponse({ error: "device_id is required" }, 400);
       }
-      const state = await fetchActiveGoal(supabase, deviceId);
+      const state = await fetchActiveGoal(supabase, deviceId, todayDate);
       return jsonResponse({ tasks: state.todaysTasks ?? [] });
     }
 

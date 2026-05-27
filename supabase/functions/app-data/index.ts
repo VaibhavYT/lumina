@@ -17,8 +17,13 @@ function colorForHabit(index: number): string {
   return ["#F0A500", "#34C97B", "#7B61FF", "#FF8C42", "#E74563"][index % 5];
 }
 
-async function fetchToday(supabase: any, deviceId: string) {
-  const today = isoDate();
+function requestDate(value: unknown): string {
+  const raw = asString(value);
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : isoDate();
+}
+
+async function fetchToday(supabase: any, deviceId: string, todayDate: string) {
+  const today = todayDate;
   const [{ data: log }, { data: tasks }, { data: habits }, { data: completions }] = await Promise.all([
     supabase.from("daily_logs").select("*").eq("device_id", deviceId).eq("log_date", today).maybeSingle(),
     supabase.from("tasks").select("*").eq("device_id", deviceId).eq("log_date", today).order("sort_order", { ascending: true }),
@@ -44,8 +49,8 @@ async function fetchToday(supabase: any, deviceId: string) {
   };
 }
 
-async function fetchDashboard(supabase: any, deviceId: string) {
-  const today = await fetchToday(supabase, deviceId);
+async function fetchDashboard(supabase: any, deviceId: string, todayDate: string) {
+  const today = await fetchToday(supabase, deviceId, todayDate);
   const since = isoDate(addDays(new Date(), -90));
   const [{ data: logs }, { data: latestInsight }, { data: burnout }] = await Promise.all([
     supabase.from("daily_logs").select("log_date").eq("device_id", deviceId).gte("log_date", since).order("log_date"),
@@ -70,6 +75,43 @@ async function fetchDashboard(supabase: any, deviceId: string) {
     streak: streaksFromLogDates((logs ?? []).map((item: any) => item.log_date)).currentStreak,
     mentorInsight: latestInsight,
     burnoutWarning: burnout,
+  };
+}
+
+async function fetchAgents(supabase: any, deviceId: string) {
+  const [{ data: insights }, { data: chatMessages }, { data: latestLog }, { data: activeGoal }] = await Promise.all([
+    supabase.from("mentor_insights")
+      .select("id, insight_type, headline, body, metadata, generated_at")
+      .eq("device_id", deviceId)
+      .order("generated_at", { ascending: false })
+      .limit(80),
+    supabase.from("mentor_chat_messages")
+      .select("id, role, metadata, created_at")
+      .eq("device_id", deviceId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1),
+    supabase.from("daily_logs")
+      .select("log_date, mood, energy, updated_at")
+      .eq("device_id", deviceId)
+      .order("log_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("goals")
+      .select("id, title, created_at, updated_at")
+      .eq("device_id", deviceId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return {
+    serverTime: new Date().toISOString(),
+    insights: insights ?? [],
+    chatMessages: chatMessages ?? [],
+    latestLog,
+    activeGoal,
   };
 }
 
@@ -150,13 +192,16 @@ Deno.serve(async (req) => {
       requestedDeviceId: asString(payload.device_id ?? payload.deviceId ?? req.headers.get("x-device-id")),
     });
     const action = asString(payload.action) ?? "dashboard";
+    const todayDate = requestDate(payload.todayDate ?? payload.date);
     switch (action) {
       case "dashboard":
-        return jsonResponse(await fetchDashboard(supabase, deviceId));
+        return jsonResponse(await fetchDashboard(supabase, deviceId, todayDate));
       case "today_log":
-        return jsonResponse(await fetchToday(supabase, deviceId));
+        return jsonResponse(await fetchToday(supabase, deviceId, todayDate));
       case "insights":
         return jsonResponse(await fetchInsights(supabase, deviceId, asInteger(payload.rangeDays, 7)));
+      case "agents":
+        return jsonResponse(await fetchAgents(supabase, deviceId));
       default:
         return jsonResponse({ error: "Unknown app-data action" }, 400);
     }

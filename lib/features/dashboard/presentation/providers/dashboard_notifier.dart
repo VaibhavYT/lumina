@@ -65,6 +65,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   }
 
   Future<void> refresh() async {
+    _repository.clearCache();
     state = const AsyncLoading<DashboardState>().copyWithPrevious(state);
     state = await AsyncValue.guard(_load);
   }

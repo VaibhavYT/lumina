@@ -35,6 +35,7 @@ const luminaDestinations = [
     icon: PhosphorIcons.chartLineUp,
   ),
   NavDestination(label: 'Mentor', path: '/mentor', icon: PhosphorIcons.sparkle),
+  NavDestination(label: 'Agents', path: '/agents', icon: PhosphorIcons.sparkle),
   NavDestination(
     label: 'Settings',
     path: '/settings',
@@ -82,7 +83,7 @@ class CustomBottomNavBar extends StatelessWidget {
             builder: (context, constraints) {
               final itemWidth =
                   constraints.maxWidth / luminaDestinations.length;
-              const indicatorWidth = 24.0;
+              const indicatorWidth = 30.0;
               final indicatorLeft =
                   itemWidth * currentIndex + itemWidth / 2 - indicatorWidth / 2;
 
@@ -93,7 +94,7 @@ class CustomBottomNavBar extends StatelessWidget {
                     duration: AppMotion.fast,
                     curve: AppMotion.enter,
                     left: indicatorLeft,
-                    bottom: 8,
+                    top: 7,
                     child: Container(
                       width: indicatorWidth,
                       height: 3,

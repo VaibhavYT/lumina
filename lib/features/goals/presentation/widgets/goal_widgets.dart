@@ -95,6 +95,18 @@ class GoalDashboardCard extends ConsumerWidget {
               color: colors.textSecondary,
             ),
           ),
+          if (snapshot.todaysTasks.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text('Today\'s goal tasks', style: context.textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            for (final task in snapshot.todaysTasks.take(3)) ...[
+              _GoalTaskPreview(
+                title: task.title,
+                isCompleted: task.isCompleted,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+            ],
+          ],
         ],
       ),
     );
@@ -111,6 +123,50 @@ class GoalDashboardCard extends ConsumerWidget {
         ),
       ),
       builder: (context) => _GoalSheet(onGoalChanged: onGoalChanged),
+    );
+  }
+}
+
+class _GoalTaskPreview extends StatelessWidget {
+  const _GoalTaskPreview({required this.title, required this.isCompleted});
+
+  final String title;
+  final bool isCompleted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.backgroundCard.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(AppRadius.radiusMd),
+        border: Border.all(color: colors.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isCompleted
+                ? PhosphorIcons.checkCircle(PhosphorIconsStyle.fill)
+                : PhosphorIcons.circle(),
+            color: isCompleted ? colors.successColor : colors.primaryAccent,
+            size: 18,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: colors.textPrimary,
+                decoration: isCompleted ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

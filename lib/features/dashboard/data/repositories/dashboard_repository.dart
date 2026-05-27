@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:lumina/core/data/lumina_models.dart';
 import 'package:lumina/core/services/device_identity_service.dart';
 import 'package:lumina/core/services/edge_function_client.dart';
@@ -20,8 +21,13 @@ class DashboardRepository {
   final SyncService _syncService;
   final DeviceIdentityService _identityService;
   final EdgeFunctionClient _edgeClient;
+  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   Map<String, dynamic>? _dashboardCache;
+
+  void clearCache() {
+    _dashboardCache = null;
+  }
 
   Future<List<Task>> getTodaysTasks() async {
     final tasks = (await _dashboard())['tasks'];
@@ -97,7 +103,11 @@ class DashboardRepository {
     final deviceId = await _identityService.getDeviceId();
     final result = await _edgeClient.invoke(
       'app-data',
-      payload: {'action': 'dashboard', 'device_id': deviceId},
+      payload: {
+        'action': 'dashboard',
+        'device_id': deviceId,
+        'todayDate': _dateFormat.format(DateTime.now()),
+      },
       headers: {'x-device-id': deviceId},
     );
     _dashboardCache = result.isSuccess ? result.data ?? const {} : const {};

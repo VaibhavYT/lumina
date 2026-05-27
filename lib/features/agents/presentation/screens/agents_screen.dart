@@ -1,0 +1,871 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:lumina/core/extensions/context_extensions.dart';
+import 'package:lumina/core/theme/app_motion.dart';
+import 'package:lumina/core/theme/app_radius.dart';
+import 'package:lumina/core/theme/app_spacing.dart';
+import 'package:lumina/features/agents/data/repositories/agents_repository.dart';
+import 'package:lumina/features/agents/presentation/providers/agents_notifier.dart';
+import 'package:lumina/shared/widgets/lumina_card.dart';
+import 'package:lumina/shared/widgets/shimmer_loader.dart';
+
+class AgentsScreen extends ConsumerWidget {
+  const AgentsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncState = ref.watch(agentsNotifierProvider);
+    final colors = context.colors;
+
+    return Scaffold(
+      backgroundColor: colors.backgroundPrimary,
+      body: asyncState.when(
+        loading: () => const _AgentsLoading(),
+        error: (error, stackTrace) => _AgentsError(
+          onRetry: () => ref.read(agentsNotifierProvider.notifier).refresh(),
+        ),
+        data: (state) => RefreshIndicator(
+          color: colors.primaryAccent,
+          backgroundColor: colors.backgroundElevated,
+          onRefresh: () => ref.read(agentsNotifierProvider.notifier).refresh(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverSafeArea(
+                bottom: false,
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.pagePadding,
+                    AppSpacing.lg,
+                    AppSpacing.pagePadding,
+                    128,
+                  ),
+                  sliver: SliverList.list(
+                    children: [
+                      _AgentsHeader(state: state),
+                      const SizedBox(height: AppSpacing.sectionGap),
+                      _LiveOperationsPanel(state: state),
+                      const SizedBox(height: AppSpacing.sectionGap),
+                      Text(
+                        'Agent Network',
+                        style: context.textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      for (var index = 0; index < state.agents.length; index++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: _AgentCard(agent: state.agents[index])
+                              .animate(delay: (60 * index).ms)
+                              .fadeIn(duration: AppMotion.slow)
+                              .slideY(begin: 0.08, end: 0),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentsHeader extends StatelessWidget {
+  const _AgentsHeader({required this.state});
+
+  final AgentsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final synced = DateFormat('h:mm a').format(state.lastSyncedAt.toLocal());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Agents', style: context.textTheme.displayMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Real backend workers watching your logs, goals, and mentor context.',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.bodyMedium?.copyWith(
+            color: colors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _SignalPill(
+              icon: Icons.sync,
+              label: 'Synced $synced',
+              color: colors.primaryAccent,
+            ),
+            _SignalPill(
+              icon: Icons.bolt,
+              label: '${state.signalCount} live signals',
+              color: colors.secondaryAccent,
+            ),
+            if (state.activeGoalTitle != null)
+              _SignalPill(
+                icon: Icons.flag_outlined,
+                label: state.activeGoalTitle!,
+                color: colors.successColor,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LiveOperationsPanel extends StatelessWidget {
+  const _LiveOperationsPanel({required this.state});
+
+  final AgentsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final next = state.nextScheduledAgent;
+
+    return LuminaCard(
+      borderRadius: AppRadius.radiusXl,
+      backgroundColor: colors.backgroundElevated,
+      child: Row(
+        children: [
+          _RadarPulse(
+            color: colors.primaryAccent,
+            secondaryColor: colors.secondaryAccent,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Live Operations',
+                  style: context.textTheme.headlineMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${state.recentlyActiveCount} ran recently. ${state.agents.length} agents are wired to backend signals.',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (next != null)
+                  _OperationLine(
+                    icon: Icons.schedule,
+                    label: 'Next',
+                    value: '${next.name} - ${_formatNextRun(next.nextRunAt!)}',
+                  )
+                else
+                  const _OperationLine(
+                    icon: Icons.sensors,
+                    label: 'Next',
+                    value: 'Waiting for a user signal',
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentCard extends StatelessWidget {
+  const _AgentCard({required this.agent});
+
+  final LuminaAgent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final tone = _statusColor(context, agent.status);
+
+    return LuminaCard(
+      borderRadius: AppRadius.radiusXl,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(AppRadius.radiusMd),
+                ),
+                child: Icon(_agentIcon(agent.id), color: tone, size: 25),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            agent.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'About ${agent.name}',
+                          onPressed: () => _showAgentInfo(context, agent),
+                          icon: const Icon(Icons.info_outline, size: 20),
+                          color: colors.textSecondary,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      agent.role,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _StatusChip(status: agent.status),
+              _FunctionChip(label: agent.functionName),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            agent.description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.bodyMedium?.copyWith(
+              color: colors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _OperationLine(
+            icon: Icons.history,
+            label: 'Last run',
+            value: _relativeTime(agent.lastRunAt),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _OperationLine(
+            icon: Icons.timeline,
+            label: 'Next',
+            value: agent.nextRunAt == null
+                ? agent.nextRunLabel
+                : '${agent.nextRunLabel} - ${_formatNextRun(agent.nextRunAt!)}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final AgentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = _statusColor(context, status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _StatusDot(color: tone, animate: status != AgentStatus.waiting),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            _statusLabel(status),
+            style: context.textTheme.labelSmall?.copyWith(color: tone),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FunctionChip extends StatelessWidget {
+  const _FunctionChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+        border: Border.all(color: colors.divider),
+      ),
+      child: Text(
+        label,
+        style: context.textTheme.labelSmall?.copyWith(
+          color: colors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SignalPill extends StatelessWidget {
+  const _SignalPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 260),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.labelSmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationLine extends StatelessWidget {
+  const _OperationLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: colors.primaryAccent),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          '$label:',
+          style: context.textTheme.labelSmall?.copyWith(
+            color: colors.textTertiary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: context.textTheme.labelSmall?.copyWith(
+              color: colors.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusDot extends StatefulWidget {
+  const _StatusDot({required this.color, required this.animate});
+
+  final Color color;
+  final bool animate;
+
+  @override
+  State<_StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.animate) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _StatusDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animate && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.animate && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final scale = widget.animate ? 1 + (_controller.value * 0.45) : 1.0;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(
+              scale: scale,
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: widget.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RadarPulse extends StatefulWidget {
+  const _RadarPulse({required this.color, required this.secondaryColor});
+
+  final Color color;
+  final Color secondaryColor;
+
+  @override
+  State<_RadarPulse> createState() => _RadarPulseState();
+}
+
+class _RadarPulseState extends State<_RadarPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 92,
+      height: 92,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _RadarPainter(
+              progress: _controller.value,
+              color: widget.color,
+              secondaryColor: widget.secondaryColor,
+              isDark: context.isDark,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RadarPainter extends CustomPainter {
+  const _RadarPainter({
+    required this.progress,
+    required this.color,
+    required this.secondaryColor,
+    required this.isDark,
+  });
+
+  final double progress;
+  final Color color;
+  final Color secondaryColor;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+    final base = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = color.withValues(alpha: isDark ? 0.18 : 0.22);
+
+    for (var index = 1; index <= 3; index++) {
+      final ringProgress = (progress + index / 3) % 1;
+      canvas.drawCircle(
+        center,
+        radius * (0.25 + ringProgress * 0.66),
+        base..color = color.withValues(alpha: (1 - ringProgress) * 0.22),
+      );
+    }
+
+    final sweep = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = secondaryColor.withValues(alpha: 0.75);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius * 0.72),
+      progress * math.pi * 2,
+      math.pi * 0.54,
+      false,
+      sweep,
+    );
+
+    final dotAngle = progress * math.pi * 2;
+    final dot = Offset(
+      center.dx + math.cos(dotAngle) * radius * 0.58,
+      center.dy + math.sin(dotAngle) * radius * 0.58,
+    );
+    canvas.drawCircle(
+      center,
+      radius * 0.22,
+      Paint()..color = color.withValues(alpha: 0.18),
+    );
+    canvas.drawCircle(center, radius * 0.11, Paint()..color = color);
+    canvas.drawCircle(dot, 4.5, Paint()..color = secondaryColor);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.secondaryColor != secondaryColor ||
+        oldDelegate.isDark != isDark;
+  }
+}
+
+class _AgentsLoading extends StatelessWidget {
+  const _AgentsLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SafeArea(
+      child: SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.all(AppSpacing.pagePadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ShimmerLoader(width: 160, height: 38),
+            SizedBox(height: AppSpacing.md),
+            ShimmerLoader(width: 300, height: 18),
+            SizedBox(height: AppSpacing.sectionGap),
+            ShimmerLoader(height: 138),
+            SizedBox(height: AppSpacing.sectionGap),
+            ShimmerLoader(height: 194),
+            SizedBox(height: AppSpacing.md),
+            ShimmerLoader(height: 194),
+            SizedBox(height: AppSpacing.md),
+            ShimmerLoader(height: 194),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentsError extends StatelessWidget {
+  const _AgentsError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.pagePadding),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_off_outlined,
+                size: 42,
+                color: colors.errorColor,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Agents could not load.',
+                style: context.textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Check your session and Supabase function status.',
+                textAlign: TextAlign.center,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _showAgentInfo(BuildContext context, LuminaAgent agent) {
+  final colors = context.colors;
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: colors.backgroundElevated,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(AppRadius.radiusXl),
+      ),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.textTertiary,
+                    borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Icon(_agentIcon(agent.id), color: colors.primaryAccent),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      agent.name,
+                      style: context.textTheme.headlineMedium,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                agent.functionName,
+                style: context.textTheme.labelLarge?.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _InfoRow(label: 'What it does', value: agent.description),
+              _InfoRow(label: 'Trigger', value: agent.trigger),
+              _InfoRow(label: 'Data used', value: agent.dataUsed),
+              _InfoRow(
+                label: 'Next',
+                value: agent.nextRunAt == null
+                    ? agent.nextRunLabel
+                    : _formatNextRun(agent.nextRunAt!),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: context.textTheme.labelLarge?.copyWith(
+              color: colors.primaryAccent,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            value,
+            style: context.textTheme.bodyMedium?.copyWith(
+              color: colors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Color _statusColor(BuildContext context, AgentStatus status) {
+  final colors = context.colors;
+  return switch (status) {
+    AgentStatus.recent => colors.successColor,
+    AgentStatus.scheduled => colors.primaryAccent,
+    AgentStatus.listening => colors.secondaryAccent,
+    AgentStatus.waiting => colors.textTertiary,
+  };
+}
+
+String _statusLabel(AgentStatus status) {
+  return switch (status) {
+    AgentStatus.recent => 'Ran recently',
+    AgentStatus.scheduled => 'Scheduled',
+    AgentStatus.listening => 'Listening',
+    AgentStatus.waiting => 'Needs data',
+  };
+}
+
+IconData _agentIcon(String id) {
+  return switch (id) {
+    'morning' => Icons.wb_sunny_outlined,
+    'burnout' => Icons.health_and_safety_outlined,
+    'patterns' => Icons.insights_outlined,
+    'goal' => Icons.route_outlined,
+    'mentor' => Icons.chat_bubble_outline,
+    'reflection' => Icons.note_alt_outlined,
+    'weekly' => Icons.event_available_outlined,
+    _ => Icons.view_week_outlined,
+  };
+}
+
+String _relativeTime(DateTime? value) {
+  if (value == null) {
+    return 'No run recorded yet';
+  }
+  final local = value.toLocal();
+  final diff = DateTime.now().difference(local);
+  if (diff.inMinutes < 1) {
+    return 'Just now';
+  }
+  if (diff.inMinutes < 60) {
+    return '${diff.inMinutes}m ago';
+  }
+  if (diff.inHours < 24) {
+    return '${diff.inHours}h ago';
+  }
+  if (diff.inDays < 7) {
+    return '${diff.inDays}d ago';
+  }
+  return DateFormat('d MMM, h:mm a').format(local);
+}
+
+String _formatNextRun(DateTime value) {
+  final local = value.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(local.year, local.month, local.day);
+  final dayLabel = target == today
+      ? 'Today'
+      : target == today.add(const Duration(days: 1))
+      ? 'Tomorrow'
+      : DateFormat('EEE, d MMM').format(local);
+  return '$dayLabel ${DateFormat('h:mm a').format(local)}';
+}

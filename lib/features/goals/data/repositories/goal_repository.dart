@@ -109,21 +109,24 @@ class GoalSnapshot {
     required this.goal,
     required this.milestones,
     required this.stats,
+    this.todaysTasks = const [],
     this.justCreatedSummary,
   });
 
   final ActiveGoal? goal;
   final List<GoalMilestone> milestones;
   final GoalStats? stats;
+  final List<Task> todaysTasks;
   final String? justCreatedSummary;
 
   bool get hasActiveGoal => goal != null;
 
-  GoalSnapshot copyWith({String? justCreatedSummary}) {
+  GoalSnapshot copyWith({List<Task>? todaysTasks, String? justCreatedSummary}) {
     return GoalSnapshot(
       goal: goal,
       milestones: milestones,
       stats: stats,
+      todaysTasks: todaysTasks ?? this.todaysTasks,
       justCreatedSummary: justCreatedSummary ?? this.justCreatedSummary,
     );
   }
@@ -154,11 +157,17 @@ class GoalRepository {
   final DeviceIdentityService _identityService;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
+  String get _todayDate => _dateFormat.format(DateTime.now());
+
   Future<GoalSnapshot> getActiveGoal() async {
     final deviceId = await _identityService.getDeviceId();
     final result = await _edgeClient.invoke(
       'goal-decomposition-agent',
-      payload: {'action': 'active_goal', 'device_id': deviceId},
+      payload: {
+        'action': 'active_goal',
+        'device_id': deviceId,
+        'todayDate': _todayDate,
+      },
       headers: {'x-device-id': deviceId},
     );
     if (!result.isSuccess) {
@@ -169,6 +178,7 @@ class GoalRepository {
     final activeGoal = data['activeGoal'];
     final milestones = data['milestones'];
     final stats = data['stats'];
+    final todaysTasks = data['todaysTasks'];
     return GoalSnapshot(
       goal: activeGoal is Map ? ActiveGoal.fromJson(activeGoal) : null,
       milestones: milestones is List
@@ -178,6 +188,12 @@ class GoalRepository {
                 .toList()
           : const [],
       stats: stats is Map ? GoalStats.fromJson(stats) : null,
+      todaysTasks: todaysTasks is List
+          ? todaysTasks
+                .whereType<Map<dynamic, dynamic>>()
+                .map(Task.fromJson)
+                .toList()
+          : const [],
     );
   }
 
@@ -193,6 +209,7 @@ class GoalRepository {
         'device_id': deviceId,
         'goalTitle': title,
         'targetDate': _dateFormat.format(targetDate),
+        'todayDate': _todayDate,
         if ((context ?? '').trim().isNotEmpty) 'context': context!.trim(),
       },
       headers: {'x-device-id': deviceId},
@@ -236,7 +253,11 @@ class GoalRepository {
     final deviceId = await _identityService.getDeviceId();
     final result = await _edgeClient.invoke(
       'goal-decomposition-agent',
-      payload: {'action': 'todays_goal_tasks', 'device_id': deviceId},
+      payload: {
+        'action': 'todays_goal_tasks',
+        'device_id': deviceId,
+        'todayDate': _todayDate,
+      },
       headers: {'x-device-id': deviceId},
     );
     final tasks = result.data?['tasks'];
