@@ -105,19 +105,22 @@ class _MentorLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.pagePadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ShimmerLoader(width: 180, height: 72),
-            SizedBox(height: AppSpacing.sectionGap),
-            ShimmerLoader(height: 220),
-            SizedBox(height: AppSpacing.md),
-            ShimmerLoader(height: 180),
-            SizedBox(height: AppSpacing.md),
-            ShimmerLoader(height: 140),
-          ],
+      child: SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.pagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ShimmerLoader(width: 180, height: 72),
+              SizedBox(height: AppSpacing.sectionGap),
+              ShimmerLoader(height: 220),
+              SizedBox(height: AppSpacing.md),
+              ShimmerLoader(height: 180),
+              SizedBox(height: AppSpacing.md),
+              ShimmerLoader(height: 140),
+            ],
+          ),
         ),
       ),
     );

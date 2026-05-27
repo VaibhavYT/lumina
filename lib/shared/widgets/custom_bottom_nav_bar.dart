@@ -82,8 +82,9 @@ class CustomBottomNavBar extends StatelessWidget {
             builder: (context, constraints) {
               final itemWidth =
                   constraints.maxWidth / luminaDestinations.length;
+              const indicatorWidth = 24.0;
               final indicatorLeft =
-                  itemWidth * currentIndex + itemWidth / 2 - 1.5;
+                  itemWidth * currentIndex + itemWidth / 2 - indicatorWidth / 2;
 
               return Stack(
                 alignment: Alignment.center,
@@ -92,10 +93,10 @@ class CustomBottomNavBar extends StatelessWidget {
                     duration: AppMotion.fast,
                     curve: AppMotion.enter,
                     left: indicatorLeft,
-                    bottom: 12,
+                    bottom: 8,
                     child: Container(
-                      width: 3,
-                      height: 16,
+                      width: indicatorWidth,
+                      height: 3,
                       decoration: BoxDecoration(
                         color: colors.primaryAccent,
                         borderRadius: BorderRadius.circular(999),

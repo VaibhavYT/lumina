@@ -7,8 +7,7 @@ import 'package:lumina/core/services/edge_function_client.dart';
 
 enum InsightRange {
   seven(7, '7D'),
-  thirty(30, '30D'),
-  ninety(90, '90D');
+  thirty(30, '30D');
 
   const InsightRange(this.days, this.label);
 
