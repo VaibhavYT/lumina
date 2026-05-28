@@ -10,6 +10,7 @@ import {
   average,
   dayNameFromDate,
   errorMessage,
+  isServiceRoleRequest,
   percentage,
   ProfileRow,
   profileName,
@@ -250,6 +251,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (!isServiceRoleRequest(req)) {
+      return jsonResponse({ error: "Service role authorization is required" }, 401);
+    }
+
     const payload = await req.json().catch(() => ({}));
     const deviceId = asString(asRecord(payload)?.device_id ?? asRecord(payload)?.deviceId);
     const supabase = adminClient();

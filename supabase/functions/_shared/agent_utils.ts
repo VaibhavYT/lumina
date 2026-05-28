@@ -194,9 +194,13 @@ function base64UrlDecode(value: string): string {
   return atob(padded);
 }
 
-export function authClaims(req: Request): JsonRecord | null {
+function bearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
+  return header.replace(/^Bearer\s+/i, "").trim();
+}
+
+export function authClaims(req: Request): JsonRecord | null {
+  const token = bearerToken(req);
   const payload = token.split(".")[1];
   if (!payload) {
     return null;
@@ -209,7 +213,8 @@ export function authClaims(req: Request): JsonRecord | null {
 }
 
 export function isServiceRoleRequest(req: Request): boolean {
-  return authClaims(req)?.role === "service_role";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  return Boolean(serviceRoleKey && bearerToken(req) === serviceRoleKey);
 }
 
 export async function resolveDeviceForRequest({
@@ -228,7 +233,7 @@ export async function resolveDeviceForRequest({
   const claims = authClaims(req);
   const userId = asString(claims?.sub);
 
-  if (claims?.role === "service_role") {
+  if (isServiceRoleRequest(req)) {
     const deviceId = asString(requestedDeviceId);
     if (!deviceId) {
       throw new Error("device_id is required for service role requests");

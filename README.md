@@ -2,6 +2,12 @@
 
 A new Flutter project.
 
+## Environment
+
+Runtime credentials are intentionally not committed. Use `.env.example` as the
+template for local Flutter environment values, and configure Supabase Edge
+Function secrets in the Supabase dashboard or CLI instead of source control.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

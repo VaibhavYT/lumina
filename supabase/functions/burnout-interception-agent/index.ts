@@ -10,6 +10,7 @@ import {
   asString,
   average,
   errorMessage,
+  isServiceRoleRequest,
   percentage,
   profileName,
 } from "../_shared/agent_utils.ts";
@@ -54,6 +55,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (!isServiceRoleRequest(req)) {
+      return jsonResponse({ error: "Service role authorization is required" }, 401);
+    }
+
     const payload = asRecord(await req.json().catch(() => ({}))) ?? {};
     const deviceId = asString(payload.device_id ?? payload.deviceId);
     const logDate = asString(payload.log_date ?? payload.logDate) ?? iso(new Date());

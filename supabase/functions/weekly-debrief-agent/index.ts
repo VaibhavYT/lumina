@@ -10,6 +10,7 @@ import {
   asString,
   average,
   errorMessage,
+  isServiceRoleRequest,
   percentage,
   ProfileRow,
   profileName,
@@ -201,6 +202,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (!isServiceRoleRequest(req)) {
+      return jsonResponse({ error: "Service role authorization is required" }, 401);
+    }
+
     const payload = await req.json().catch(() => ({}));
     const record = asRecord(payload);
     const deviceId = asString(record?.device_id ?? record?.deviceId);
