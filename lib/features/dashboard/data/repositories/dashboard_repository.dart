@@ -116,7 +116,11 @@ class DashboardRepository {
 
   HabitProgress _habitFromRemote(Map<dynamic, dynamic> json) {
     return HabitProgress(
-      habitId: json['id'] as String? ?? json['name'] as String? ?? '',
+      habitId:
+          json['local_habit_id'] as String? ??
+          json['id'] as String? ??
+          json['name'] as String? ??
+          '',
       name: json['name'] as String? ?? 'Habit',
       emoji: json['emoji'] as String? ?? '*',
       color: _parseColor(json['color_hex'] as String? ?? '#F0A500'),

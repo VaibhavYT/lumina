@@ -583,36 +583,45 @@ class HabitRingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final completed = habit.progress >= 1;
+    Widget ring = TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: habit.progress),
+      duration: context.livingCanvas.xSlow,
+      curve: context.livingCanvas.curve,
+      builder: (context, value, child) {
+        return CustomPaint(
+          painter: _HabitRingPainter(
+            progress: value,
+            color: habit.color,
+            trackColor: context.colors.textTertiary.withValues(alpha: 0.28),
+          ),
+          child: SizedBox(
+            width: 64,
+            height: 64,
+            child: Center(
+              child: Text(habit.emoji, style: const TextStyle(fontSize: 23)),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (completed) {
+      ring = ring
+          .animate(onPlay: (controller) => controller.repeat(reverse: true))
+          .scaleXY(
+            begin: 1,
+            end: 1.045,
+            duration: context.livingCanvas.slow,
+            curve: context.livingCanvas.curve,
+          );
+    }
+
     return SizedBox(
       width: 80,
       child: Column(
         children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: habit.progress),
-            duration: AppMotion.xSlow,
-            curve: AppMotion.enter,
-            builder: (context, value, child) {
-              return CustomPaint(
-                painter: _HabitRingPainter(
-                  progress: value,
-                  color: habit.color,
-                  trackColor: context.colors.textTertiary.withValues(
-                    alpha: 0.28,
-                  ),
-                ),
-                child: SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: Center(
-                    child: Text(
-                      habit.emoji,
-                      style: const TextStyle(fontSize: 23),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          ring,
           const SizedBox(height: AppSpacing.sm),
           Text(
             habit.name,

@@ -26,7 +26,13 @@ class TodayLogState {
 
   int get completedSections => log.completedSections;
 
-  bool get canSave => log.mood != null || log.tasks.isNotEmpty;
+  bool get canSave =>
+      log.mood != null ||
+      log.energy != null ||
+      log.tasks.isNotEmpty ||
+      log.completedHabitIds.isNotEmpty ||
+      (log.moodNote ?? '').trim().isNotEmpty ||
+      (log.notes ?? '').trim().isNotEmpty;
 
   TodayLogState copyWith({
     DailyLog? log,
@@ -133,46 +139,58 @@ class TodayLogNotifier extends AsyncNotifier<TodayLogState> {
     });
   }
 
-  void toggleHabit(String habitId) {
-    _mutate((current) {
-      final isCompleted = current.log.completedHabitIds.contains(habitId);
-      final completedIds = isCompleted
-          ? current.log.completedHabitIds.where((id) => id != habitId).toList()
-          : [...current.log.completedHabitIds, habitId];
-      final habits = [
-        for (final habit in current.habits)
-          if (habit.habitId == habitId)
-            habit.copyWith(completedToday: isCompleted ? 0 : habit.targetPerDay)
-          else
-            habit,
-      ];
-      return current.copyWith(
-        habits: habits,
-        log: current.log.copyWith(completedHabitIds: completedIds),
-      );
-    });
+  Future<void> toggleHabit(String habitId) async {
+    final current = state.valueOrNull;
+    if (current == null) {
+      return;
+    }
+    final isCompleted = current.log.completedHabitIds.contains(habitId);
+    final completedIds = isCompleted
+        ? current.log.completedHabitIds.where((id) => id != habitId).toList()
+        : [...current.log.completedHabitIds, habitId];
+    final habits = [
+      for (final habit in current.habits)
+        if (habit.habitId == habitId)
+          habit.copyWith(completedToday: isCompleted ? 0 : habit.targetPerDay)
+        else
+          habit,
+    ];
+    final updated = current.copyWith(
+      habits: habits,
+      log: current.log.copyWith(completedHabitIds: completedIds),
+      savedToday: true,
+    );
+    state = AsyncData(updated);
+    await _repository.saveDailyLog(updated.log);
   }
 
-  void addHabit({
+  Future<void> addHabit({
     required String name,
     required String emoji,
     required Color color,
-  }) {
+  }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       return;
     }
-    _mutate((current) {
-      final habit = HabitProgress(
-        habitId: DateTime.now().microsecondsSinceEpoch.toString(),
-        name: trimmed,
-        emoji: emoji,
-        color: color,
-        completedToday: 0,
-        targetPerDay: 1,
-      );
-      return current.copyWith(habits: [...current.habits, habit]);
-    });
+    final current = state.valueOrNull;
+    if (current == null) {
+      return;
+    }
+    final habit = HabitProgress(
+      habitId: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: trimmed,
+      emoji: emoji,
+      color: color,
+      completedToday: 0,
+      targetPerDay: 1,
+    );
+    final updated = current.copyWith(
+      habits: [...current.habits, habit],
+      savedToday: current.savedToday,
+    );
+    state = AsyncData(updated);
+    await _repository.saveHabits(updated.habits);
   }
 
   Future<bool> save() async {

@@ -193,14 +193,38 @@ class HabitProgress {
 
   factory HabitProgress.fromJson(Map<dynamic, dynamic> json) {
     return HabitProgress(
-      habitId: json['habitId'] as String? ?? _uuid.v4(),
+      habitId:
+          json['habitId'] as String? ??
+          json['habit_id'] as String? ??
+          json['local_habit_id'] as String? ??
+          json['id'] as String? ??
+          _uuid.v4(),
       name: json['name'] as String? ?? 'Habit',
       emoji: json['emoji'] as String? ?? '*',
-      color: Color(json['color'] as int? ?? 0xFFF0A500),
+      color: _colorFromJson(json),
       completedToday: json['completedToday'] as int? ?? 0,
       targetPerDay: json['targetPerDay'] as int? ?? 1,
     );
   }
+}
+
+Color _colorFromJson(Map<dynamic, dynamic> json) {
+  final value = json['color'];
+  if (value is int) {
+    return Color(value);
+  }
+  final hex = json['color_hex'] as String?;
+  if (hex != null) {
+    final cleaned = hex.replaceAll('#', '');
+    final parsed = int.tryParse(
+      cleaned.length == 6 ? 'FF$cleaned' : cleaned,
+      radix: 16,
+    );
+    if (parsed != null) {
+      return Color(parsed);
+    }
+  }
+  return const Color(0xFFF0A500);
 }
 
 @immutable

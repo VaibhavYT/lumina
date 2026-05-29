@@ -761,7 +761,8 @@ class HabitsTrackerSection extends StatelessWidget {
 
   final List<HabitProgress> habits;
   final ValueChanged<String> onToggleHabit;
-  final void Function(String name, String emoji, Color color) onAddHabit;
+  final Future<void> Function(String name, String emoji, Color color)
+  onAddHabit;
 
   @override
   Widget build(BuildContext context) {
@@ -770,43 +771,291 @@ class HabitsTrackerSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Habits', style: context.textTheme.headlineMedium),
-          const SizedBox(height: AppSpacing.sm),
-          for (final habit in habits) ...[
-            _HabitCheckRow(
-              habit: habit,
-              onTap: () => onToggleHabit(habit.habitId),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          GestureDetector(
-            onTap: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => _AddHabitSheet(onAddHabit: onAddHabit),
-            ),
-            child: Container(
-              height: 54,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.radiusLg),
-                border: Border.all(
-                  color: context.colors.divider,
-                  style: BorderStyle.solid,
-                ),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Habits', style: context.textTheme.headlineMedium),
               ),
-              child: Text(
-                '+ Add a habit',
-                style: context.textTheme.bodyMedium?.copyWith(
-                  color: context.colors.textSecondary,
-                ),
-              ),
-            ),
+              _HabitProgressPill(habits: habits),
+            ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+          _HabitFlowLine(habits: habits),
+          const SizedBox(height: AppSpacing.md),
+          if (habits.isEmpty) ...[
+            _EmptyHabitPrompt(onAddHabit: onAddHabit),
+          ] else ...[
+            for (final (index, habit) in habits.indexed) ...[
+              _HabitCheckRow(
+                habit: habit,
+                onTap: () => onToggleHabit(habit.habitId),
+              ),
+              if (index != habits.length - 1)
+                const SizedBox(height: AppSpacing.sm),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            _AddHabitInlineButton(onAddHabit: onAddHabit),
+          ],
         ],
       ),
     );
+  }
+}
+
+class _HabitProgressPill extends StatelessWidget {
+  const _HabitProgressPill({required this.habits});
+
+  final List<HabitProgress> habits;
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = habits.where((habit) => habit.progress >= 1).length;
+    final colors = context.colors;
+
+    return AnimatedContainer(
+      duration: context.livingCanvas.fast,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.primaryAccentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+        border: Border.all(color: colors.primaryAccent.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        habits.isEmpty ? '0 active' : '$completed/${habits.length} today',
+        style: context.textTheme.labelSmall?.copyWith(
+          color: colors.primaryAccent,
+        ),
+      ),
+    );
+  }
+}
+
+class _HabitFlowLine extends StatefulWidget {
+  const _HabitFlowLine({required this.habits});
+
+  final List<HabitProgress> habits;
+
+  @override
+  State<_HabitFlowLine> createState() => _HabitFlowLineState();
+}
+
+class _HabitFlowLineState extends State<_HabitFlowLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final completed = widget.habits
+        .where((habit) => habit.progress >= 1)
+        .length;
+    final progress = widget.habits.isEmpty
+        ? 0.0
+        : completed / widget.habits.length;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.radiusFull),
+      child: SizedBox(
+        height: 7,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              painter: _HabitFlowPainter(
+                progress: progress,
+                shimmer: _controller.value,
+                track: colors.divider,
+                color: colors.primaryAccent,
+                secondary: colors.secondaryAccent,
+              ),
+              child: const SizedBox.expand(),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AddHabitInlineButton extends StatelessWidget {
+  const _AddHabitInlineButton({required this.onAddHabit});
+
+  final Future<void> Function(String name, String emoji, Color color)
+  onAddHabit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AddHabitSheet(onAddHabit: onAddHabit),
+      ),
+      child: AnimatedContainer(
+        duration: context.livingCanvas.fast,
+        curve: context.livingCanvas.curve,
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: colors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(AppRadius.radiusLg),
+          border: Border.all(color: colors.divider),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(PhosphorIcons.plusCircle(), color: colors.primaryAccent),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Add habit',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyHabitPrompt extends StatelessWidget {
+  const _EmptyHabitPrompt({required this.onAddHabit});
+
+  final Future<void> Function(String name, String emoji, Color color)
+  onAddHabit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AddHabitSheet(onAddHabit: onAddHabit),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(AppRadius.radiusLg),
+          border: Border.all(color: colors.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: colors.primaryAccentSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                PhosphorIcons.sparkle(PhosphorIconsStyle.fill),
+                color: colors.primaryAccent,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Create your first rhythm',
+                    style: context.textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Small returns become streaks.',
+                    style: context.textTheme.bodySmall?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(PhosphorIcons.plus(), color: colors.primaryAccent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HabitFlowPainter extends CustomPainter {
+  const _HabitFlowPainter({
+    required this.progress,
+    required this.shimmer,
+    required this.track,
+    required this.color,
+    required this.secondary,
+  });
+
+  final double progress;
+  final double shimmer;
+  final Color track;
+  final Color color;
+  final Color secondary;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = track);
+    if (progress <= 0) {
+      return;
+    }
+    final width = size.width * progress.clamp(0, 1);
+    final rect = Rect.fromLTWH(0, 0, width, size.height);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [color, secondary],
+        ).createShader(rect),
+    );
+    final glintWidth = math.min(54.0, width);
+    final glintLeft = (width + glintWidth) * shimmer - glintWidth;
+    final glintRect = Rect.fromLTWH(glintLeft, 0, glintWidth, size.height);
+    canvas.drawRect(
+      glintRect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: 0.38),
+            Colors.white.withValues(alpha: 0),
+          ],
+        ).createShader(glintRect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HabitFlowPainter oldDelegate) {
+    return progress != oldDelegate.progress ||
+        shimmer != oldDelegate.shimmer ||
+        track != oldDelegate.track ||
+        color != oldDelegate.color ||
+        secondary != oldDelegate.secondary;
   }
 }
 
@@ -976,7 +1225,8 @@ class _BurstPainter extends CustomPainter {
 class _AddHabitSheet extends StatefulWidget {
   const _AddHabitSheet({required this.onAddHabit});
 
-  final void Function(String name, String emoji, Color color) onAddHabit;
+  final Future<void> Function(String name, String emoji, Color color)
+  onAddHabit;
 
   @override
   State<_AddHabitSheet> createState() => _AddHabitSheetState();
@@ -987,6 +1237,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
   var _emoji = '📘';
   var _color = const Color(0xFFF0A500);
   var _frequency = 'Daily';
+  var _isSaving = false;
 
   static const _emojis = [
     '📘',
@@ -1124,11 +1375,21 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
               ),
               const SizedBox(height: AppSpacing.lg),
               LuminaButton(
-                label: 'Add Habit',
-                onPressed: () {
-                  widget.onAddHabit(_controller.text, _emoji, _color);
-                  Navigator.of(context).pop();
-                },
+                label: _isSaving ? 'Saving Habit' : 'Add Habit',
+                isLoading: _isSaving,
+                onPressed: _isSaving
+                    ? null
+                    : () async {
+                        final name = _controller.text.trim();
+                        if (name.isEmpty) {
+                          return;
+                        }
+                        setState(() => _isSaving = true);
+                        await widget.onAddHabit(name, _emoji, _color);
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      },
               ),
             ],
           ),
