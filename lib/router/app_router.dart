@@ -10,6 +10,7 @@ import 'package:lumina/features/dashboard/presentation/screens/dashboard_screen.
 import 'package:lumina/features/insights/presentation/screens/insights_screen.dart';
 import 'package:lumina/features/log/presentation/screens/daily_log_screen.dart';
 import 'package:lumina/features/mentor/presentation/screens/mentor_screen.dart';
+import 'package:lumina/features/mentor/presentation/screens/untangle_screen.dart';
 import 'package:lumina/features/settings/presentation/screens/settings_screen.dart';
 import 'package:lumina/router/app_shell.dart';
 import 'package:lumina/shared/animations/fade_slide_transition.dart';
@@ -56,6 +57,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/auth',
         pageBuilder: (context, state) =>
             fadeSlidePage(key: state.pageKey, child: const AuthScreen()),
+      ),
+      GoRoute(
+        path: '/mentor/untangle',
+        pageBuilder: (context, state) =>
+            fadeSlidePage(key: state.pageKey, child: const UntangleScreen()),
       ),
       ShellRoute(
         builder: (context, state, child) {

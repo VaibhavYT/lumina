@@ -27,6 +27,13 @@ function chatHistory(value: unknown): ChatMessage[] {
     .slice(-12);
 }
 
+function payloadContext(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
 async function storeChatMessages(
   supabase: any,
   deviceId: string,
@@ -80,6 +87,7 @@ Deno.serve(async (req) => {
     });
     const sessionId = String(payload.sessionId ?? payload.session_id ?? crypto.randomUUID());
     const history = chatHistory(payload.history);
+    const appContext = payloadContext(payload.context);
     const [{ data: recentLogs }, { data: tasks }, { data: habits }, { data: insights }] =
       await Promise.all([
         supabase.from("daily_logs").select("log_date, mood, energy, notes").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(14),
@@ -87,17 +95,51 @@ Deno.serve(async (req) => {
         supabase.from("habits").select("name, frequency, is_active").eq("device_id", deviceId).eq("is_active", true),
         supabase.from("mentor_insights").select("insight_type, headline, body, generated_at").eq("device_id", deviceId).eq("is_dismissed", false).order("generated_at", { ascending: false }).limit(8),
       ]);
-    const prompt = `You are Lumina, a warm, wise, direct AI life mentor.
+    const context = JSON.stringify({
+      recentLogs,
+      recentTasks: tasks,
+      activeHabits: habits,
+      recentInsights: insights,
+      appContext,
+      conversationHistory: history,
+    });
+
+    const isUntangle = appContext.source === "untangle";
+    const untangleStage = String(appContext.stage ?? "");
+    const prompt = isUntangle && untangleStage === "breakthrough"
+      ? `You are Lumina in Untangle mode. Synthesize this Socratic session into one Breakthrough card.
 
 Context:
-${JSON.stringify({
-  recentLogs,
-  recentTasks: tasks,
-  activeHabits: habits,
-  recentInsights: insights,
-  appContext: payload.context ?? {},
-  conversationHistory: history,
-})}
+${context}
+
+Final user request: "${question}"
+
+Rules:
+1. Return exactly three plain-text sections: "Pattern:", "Truth:", and "Next brave move:".
+2. Keep the entire card under 120 words.
+3. Be specific to the conversation and the user's real context.
+4. Make it compassionate, clear, and memorable.
+5. Do not add markdown, bullets, greetings, or caveats.`
+      : isUntangle
+      ? `You are Lumina in Untangle mode: a calm Socratic mentor for complex thoughts.
+
+Context:
+${context}
+
+User's latest reply: "${question}"
+
+Rules:
+1. Ask exactly one piercing question.
+2. Do not answer, advise, summarize, validate, or list options.
+3. The question must follow from the user's latest reply and the conversation history.
+4. Prefer "why", "what", or "if" questions that reveal assumptions, fear, stakes, or values.
+5. Keep it under 24 words.
+6. If the user describes self-harm, immediate danger, or abuse, prioritize immediate safety in one concise sentence, then ask one grounding question.
+7. Return only the response text.`
+      : `You are Lumina, a warm, wise, direct AI life mentor.
+
+Context:
+${context}
 
 Question: "${question}"
 
@@ -110,7 +152,11 @@ Rules:
 
     const answer = await generateGeminiText(
       prompt,
-      "Start with the smallest next action you can repeat today. The pattern matters less than making it visible, then choosing one honest adjustment.",
+      isUntangle && untangleStage === "breakthrough"
+        ? "Pattern: Something important is asking for attention.\n\nTruth: The next step does not need to solve everything.\n\nNext brave move: Name one honest action you can take today."
+        : isUntangle
+        ? "What feels most true about that, even if it is uncomfortable to say plainly?"
+        : "Start with the smallest next action you can repeat today. The pattern matters less than making it visible, then choosing one honest adjustment.",
     );
 
     await storeChatMessages(supabase, deviceId, sessionId, question, answer);

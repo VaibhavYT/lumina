@@ -222,6 +222,91 @@ class DailyReflectionCard extends StatelessWidget {
   }
 }
 
+class UntangleEntryCard extends StatelessWidget {
+  const UntangleEntryCard({super.key, required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      onTap: onStart,
+      child: Container(
+        padding: const EdgeInsets.all(1),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.radiusXl),
+          gradient: LinearGradient(
+            colors: [
+              colors.secondaryAccent.withValues(alpha: 0.55),
+              colors.primaryAccent.withValues(alpha: 0.35),
+            ],
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: colors.backgroundCard,
+            borderRadius: BorderRadius.circular(AppRadius.radiusXl - 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: colors.secondaryAccentSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  PhosphorIcons.brain(PhosphorIconsStyle.fill),
+                  color: colors.secondaryAccent,
+                  size: 25,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Untangle', style: context.textTheme.headlineMedium),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'A Socratic deep dive for thoughts that need space.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colors.primaryAccent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
+                  color: context.isDark
+                      ? colors.backgroundPrimary
+                      : Colors.white,
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class TypewriterText extends StatefulWidget {
   const TypewriterText({super.key, required this.text});
 

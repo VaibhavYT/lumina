@@ -4,6 +4,7 @@ import 'package:lumina/core/data/lumina_models.dart';
 import 'package:lumina/core/services/device_identity_service.dart';
 import 'package:lumina/core/services/edge_function_client.dart';
 import 'package:lumina/core/services/sync_service.dart';
+import 'package:lumina/features/log/data/repositories/log_repository.dart';
 
 class WeeklyPlanDay {
   const WeeklyPlanDay({
@@ -88,13 +89,16 @@ class MentorRepository {
     EdgeFunctionClient? edgeClient,
     DeviceIdentityService? identityService,
     SyncService? syncService,
+    LogRepository? logRepository,
   }) : _edgeClient = edgeClient ?? EdgeFunctionClient(),
        _identityService = identityService ?? DeviceIdentityService(),
-       _syncService = syncService ?? SyncService();
+       _syncService = syncService ?? SyncService(),
+       _logRepository = logRepository ?? LogRepository();
 
   final EdgeFunctionClient _edgeClient;
   final DeviceIdentityService _identityService;
   final SyncService _syncService;
+  final LogRepository _logRepository;
 
   Future<String> get deviceId => _identityService.getDeviceId();
 
@@ -185,6 +189,11 @@ class MentorRepository {
     required String question,
     required String sessionId,
     required List<MentorChatMessage> history,
+    Map<String, dynamic> context = const <String, dynamic>{
+      'source': 'lumina_chat',
+    },
+    String fallbackAnswer =
+        'I could not reach the mentor service. Try again after your latest log syncs.',
   }) async {
     final id = await deviceId;
     final result = await _edgeClient.invoke(
@@ -194,15 +203,59 @@ class MentorRepository {
         'sessionId': sessionId,
         'question': question,
         'history': history.map((message) => message.toPayload()).toList(),
-        'context': {'source': 'lumina_chat'},
+        'context': context,
       },
       headers: {'x-device-id': id},
     );
     final answer = result.data?['answer'] as String?;
     final content = answer?.trim().isNotEmpty == true
         ? answer!.trim()
-        : 'I could not reach the mentor service. Try again after your latest log syncs.';
+        : fallbackAnswer;
     return MentorChatMessage(role: MentorChatRole.assistant, content: content);
+  }
+
+  Future<MentorChatMessage> sendUntangleReply({
+    required String reply,
+    required String sessionId,
+    required List<MentorChatMessage> history,
+  }) {
+    return sendChatMessage(
+      question: reply,
+      sessionId: sessionId,
+      history: history,
+      context: {
+        'source': 'untangle',
+        'stage': 'socratic',
+        'turnCount': history.length,
+      },
+      fallbackAnswer:
+          'What feels most true about that, even if it is uncomfortable to say plainly?',
+    );
+  }
+
+  Future<String> synthesizeBreakthrough({
+    required String sessionId,
+    required List<MentorChatMessage> history,
+  }) async {
+    final answer = await sendChatMessage(
+      question: 'Create the final Breakthrough card for this Untangle session.',
+      sessionId: sessionId,
+      history: history,
+      context: {
+        'source': 'untangle',
+        'stage': 'breakthrough',
+        'turnCount': history.length,
+      },
+      fallbackAnswer: _localBreakthrough(history),
+    );
+    return answer.content;
+  }
+
+  Future<void> saveBreakthroughToJournal(String breakthrough) {
+    return _logRepository.appendJournalEntry(
+      'Breakthrough - ${DateTime.now().toIso8601String().substring(0, 10)}\n\n'
+      '${breakthrough.trim()}',
+    );
   }
 
   Future<void> dismissInsight(String id) async {
@@ -252,4 +305,19 @@ class MentorRepository {
       return null;
     }
   }
+}
+
+String _localBreakthrough(List<MentorChatMessage> history) {
+  final userReplies = history
+      .where((message) => message.role == MentorChatRole.user)
+      .map((message) => message.content.trim())
+      .where((content) => content.isNotEmpty)
+      .toList();
+  final first = userReplies.isEmpty
+      ? 'This matters to you.'
+      : userReplies.first;
+  final last = userReplies.isEmpty ? first : userReplies.last;
+  return 'Pattern: $first\n\n'
+      'Truth: $last\n\n'
+      'Next brave move: Choose one small action that respects this truth today.';
 }

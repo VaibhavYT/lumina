@@ -57,6 +57,19 @@ class LogRepository {
     await _syncService.syncHabits(habits);
   }
 
+  Future<void> appendJournalEntry(String entry) async {
+    final trimmed = entry.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final log = await getTodayLog() ?? DailyLog(date: DateTime.now());
+    final currentNotes = log.notes?.trim();
+    final nextNotes = currentNotes == null || currentNotes.isEmpty
+        ? trimmed
+        : '$currentNotes\n\n$trimmed';
+    await saveDailyLog(log.copyWith(notes: nextNotes));
+  }
+
   Future<void> updateTask(String id, bool isCompleted) async {
     final log = await getTodayLog();
     if (log == null) {

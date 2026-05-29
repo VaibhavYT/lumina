@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/features/mentor/presentation/providers/mentor_notifier.dart';
@@ -42,6 +43,10 @@ class MentorScreen extends ConsumerWidget {
                       const MentorHeader(),
                       const SizedBox(height: AppSpacing.sectionGap),
                       DailyReflectionCard(insight: state.dailyReflection),
+                      const SizedBox(height: AppSpacing.sectionGap),
+                      UntangleEntryCard(
+                        onStart: () => context.push('/mentor/untangle'),
+                      ),
                       const SizedBox(height: AppSpacing.sectionGap),
                       if (state.coachingMission != null) ...[
                         CoachingCard(
