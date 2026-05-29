@@ -16,5 +16,11 @@ class AppMotion {
   static const Curve bounce = Curves.bounceOut;
   static const Curve decelerate = Curves.decelerate;
 
+  static const double springStiffnessSoft = 100;
+  static const double springStiffnessNormal = 200;
+  static const double springStiffnessSnappy = 400;
+  static const double springDampingNormal = 16;
+  static const double springDampingHeavy = 24;
+
   static const double pressedScale = 0.97;
 }

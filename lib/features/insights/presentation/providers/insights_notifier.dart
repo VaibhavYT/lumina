@@ -16,12 +16,14 @@ class InsightsState {
     required this.days,
     required this.triggers,
     required this.productivity,
+    required this.retrospective,
   });
 
   final InsightRange range;
   final List<InsightDay> days;
   final List<EmotionalTrigger> triggers;
   final ProductivitySummary productivity;
+  final MonthlyRetrospective retrospective;
 
   double get averageMood {
     if (days.isEmpty) {
@@ -40,7 +42,7 @@ class InsightsState {
 
 class InsightsNotifier extends AsyncNotifier<InsightsState> {
   InsightsRepository get _repository => ref.read(insightsRepositoryProvider);
-  InsightRange _range = InsightRange.seven;
+  InsightRange _range = InsightRange.thirty;
 
   @override
   Future<InsightsState> build() async {
@@ -60,11 +62,17 @@ class InsightsNotifier extends AsyncNotifier<InsightsState> {
     final days = await _repository.getInsightDays(_range);
     final triggers = await _repository.getEmotionalTriggers(days);
     final productivity = _repository.summarizeProductivity(days);
+    final retrospective = _repository.buildMonthlyRetrospective(
+      _range,
+      days,
+      triggers,
+    );
     return InsightsState(
       range: _range,
       days: days,
       triggers: triggers,
       productivity: productivity,
+      retrospective: retrospective,
     );
   }
 }

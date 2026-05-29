@@ -51,6 +51,7 @@ class CustomBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final canvas = context.livingCanvas;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final height = AppSpacing.bottomNavHeight + bottomInset;
 
@@ -91,8 +92,8 @@ class CustomBottomNavBar extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   AnimatedPositioned(
-                    duration: AppMotion.fast,
-                    curve: AppMotion.enter,
+                    duration: canvas.fast,
+                    curve: canvas.curve,
                     left: indicatorLeft,
                     top: 7,
                     child: Container(
@@ -141,6 +142,7 @@ class _BottomNavItemState extends State<_BottomNavItem> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final canvas = context.livingCanvas;
     final iconColor = widget.isActive
         ? colors.primaryAccent
         : colors.textTertiary;
@@ -160,16 +162,16 @@ class _BottomNavItemState extends State<_BottomNavItem> {
         }
       },
       child: AnimatedScale(
-        duration: AppMotion.fast,
-        curve: AppMotion.spring,
+        duration: canvas.fast,
+        curve: canvas.springCurve,
         scale: _pressed ? 0.85 : 1,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: iconColor, size: 24),
             AnimatedSwitcher(
-              duration: AppMotion.fast,
-              switchInCurve: AppMotion.enter,
+              duration: canvas.fast,
+              switchInCurve: canvas.curve,
               switchOutCurve: AppMotion.exit,
               child: widget.isActive
                   ? Padding(

@@ -218,16 +218,7 @@ class _DashboardHeader extends StatelessWidget {
 
           return Container(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.topRight,
-                radius: 1.2,
-                colors: [
-                  colors.primaryAccent.withValues(
-                    alpha: context.isDark ? 0.04 : 0.06,
-                  ),
-                  Colors.transparent,
-                ],
-              ),
+              gradient: context.livingCanvas.heroGradient(colors),
             ),
             child: Opacity(
               opacity: expandedFraction,

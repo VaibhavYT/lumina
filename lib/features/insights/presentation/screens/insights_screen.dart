@@ -5,6 +5,7 @@ import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/features/insights/data/repositories/insights_repository.dart';
 import 'package:lumina/features/insights/presentation/providers/insights_notifier.dart';
 import 'package:lumina/features/insights/presentation/widgets/insights_widgets.dart';
+import 'package:lumina/features/insights/presentation/widgets/monthly_constellations.dart';
 import 'package:lumina/features/goals/presentation/providers/goal_notifier.dart';
 import 'package:lumina/features/goals/presentation/widgets/goal_widgets.dart';
 import 'package:lumina/shared/widgets/shimmer_loader.dart';
@@ -47,38 +48,43 @@ class InsightsScreen extends ConsumerWidget {
                 expandedHeight: 152,
                 backgroundColor: colors.backgroundPrimary,
                 surfaceTintColor: Colors.transparent,
-                flexibleSpace: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.pagePadding,
-                      AppSpacing.lg,
-                      AppSpacing.pagePadding,
-                      0,
-                    ),
-                    child: SingleChildScrollView(
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Your Patterns',
-                            style: context.textTheme.displayMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            'Insights from the last ${state.range.days} days',
-                            style: context.textTheme.bodyMedium?.copyWith(
-                              color: colors.textSecondary,
+                flexibleSpace: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: context.livingCanvas.heroGradient(colors),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.pagePadding,
+                        AppSpacing.lg,
+                        AppSpacing.pagePadding,
+                        0,
+                      ),
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Your Patterns',
+                              style: context.textTheme.displayMedium,
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          TimeRangeFilter(
-                            selected: state.range,
-                            onChanged: (range) => ref
-                                .read(insightsNotifierProvider.notifier)
-                                .setRange(range),
-                          ),
-                        ],
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Insights from the last ${state.range.days} days',
+                              style: context.textTheme.bodyMedium?.copyWith(
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            TimeRangeFilter(
+                              selected: state.range,
+                              onChanged: (range) => ref
+                                  .read(insightsNotifierProvider.notifier)
+                                  .setRange(range),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -93,6 +99,10 @@ class InsightsScreen extends ConsumerWidget {
                 ),
                 sliver: SliverList.list(
                   children: [
+                    MonthlyConstellationsCard(
+                      retrospective: state.retrospective,
+                    ),
+                    const SizedBox(height: AppSpacing.sectionGap),
                     MoodJourneyCard(days: state.days),
                     const SizedBox(height: AppSpacing.sectionGap),
                     EnergyPatternsCard(days: state.days),

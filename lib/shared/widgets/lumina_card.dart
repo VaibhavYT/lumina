@@ -41,11 +41,12 @@ class _LuminaCardState extends State<LuminaCard> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final canvas = context.livingCanvas;
 
     final card = AnimatedScale(
       scale: _pressed ? AppMotion.pressedScale : 1,
-      duration: AppMotion.instant,
-      curve: AppMotion.enter,
+      duration: canvas.instant,
+      curve: canvas.curve,
       child: Container(
         padding: widget.padding,
         decoration: BoxDecoration(

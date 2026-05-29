@@ -35,7 +35,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   firebase_core: any
   firebase_messaging: any
-  fl_chart: any
+  fl_chart: 0.70.2
   flutter_animate: any
   flutter_dotenv: any
   flutter_riverpod: any

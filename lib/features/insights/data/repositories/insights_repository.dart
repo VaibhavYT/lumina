@@ -112,6 +112,68 @@ class ProductivitySummary {
   final String challengingDay;
 }
 
+class MonthlyRetrospective {
+  const MonthlyRetrospective({
+    required this.range,
+    required this.days,
+    required this.monthLabel,
+    required this.loggedDays,
+    required this.longestHabitStreak,
+    required this.energyDelta,
+    required this.startEnergy,
+    required this.endEnergy,
+    required this.averageMood,
+    this.positiveTrigger,
+  });
+
+  final InsightRange range;
+  final List<InsightDay> days;
+  final String monthLabel;
+  final int loggedDays;
+  final int longestHabitStreak;
+  final double energyDelta;
+  final double startEnergy;
+  final double endEnergy;
+  final double averageMood;
+  final EmotionalTrigger? positiveTrigger;
+
+  bool get hasEnoughData => days.length >= 3;
+
+  String get title =>
+      range == InsightRange.thirty ? 'Monthly Retrospective' : 'Recent Stars';
+
+  String get energyStory {
+    if (startEnergy == 0 || endEnergy == 0) {
+      return 'Energy will reveal itself as you keep logging.';
+    }
+    if (energyDelta >= 0.2) {
+      return 'Your energy lifted by ${energyDelta.toStringAsFixed(1)} points.';
+    }
+    if (energyDelta <= -0.2) {
+      return 'Your energy asked for more recovery this month.';
+    }
+    return 'Your energy held steady with quiet consistency.';
+  }
+
+  String get positiveTriggerLabel {
+    final trigger = positiveTrigger;
+    if (trigger == null) {
+      return 'No positive trigger yet';
+    }
+    return trigger.tag;
+  }
+
+  String get shareText {
+    return [
+      'Lumina $title - $monthLabel',
+      '$loggedDays logged days',
+      'Longest habit streak: $longestHabitStreak days',
+      energyStory,
+      'Brightest trigger: $positiveTriggerLabel',
+    ].join('\n');
+  }
+}
+
 class InsightsRepository {
   InsightsRepository({
     EdgeFunctionClient? edgeClient,
@@ -278,6 +340,40 @@ class InsightsRepository {
     );
   }
 
+  MonthlyRetrospective buildMonthlyRetrospective(
+    InsightRange range,
+    List<InsightDay> days,
+    List<EmotionalTrigger> triggers,
+  ) {
+    final sorted = [...days]..sort((a, b) => a.date.compareTo(b.date));
+    final energy = _energyShift(sorted);
+    final positiveTriggers =
+        triggers.where((trigger) => trigger.moodCorrelation > 0).toList()
+          ..sort((a, b) => b.moodCorrelation.compareTo(a.moodCorrelation));
+    final monthLabel = sorted.isEmpty
+        ? DateFormat('MMMM yyyy').format(DateTime.now())
+        : DateFormat('MMMM yyyy').format(sorted.last.date);
+
+    return MonthlyRetrospective(
+      range: range,
+      days: sorted,
+      monthLabel: monthLabel,
+      loggedDays: sorted.length,
+      longestHabitStreak: _longestHabitStreak(sorted),
+      energyDelta: energy.delta,
+      startEnergy: energy.start,
+      endEnergy: energy.end,
+      averageMood: sorted.isEmpty
+          ? 0
+          : sorted
+                    .where((day) => day.mood > 0)
+                    .map((day) => day.mood)
+                    .fold<int>(0, (a, b) => a + b) /
+                math.max(1, sorted.where((day) => day.mood > 0).length),
+      positiveTrigger: positiveTriggers.isEmpty ? null : positiveTriggers.first,
+    );
+  }
+
   Future<List<EmotionalTrigger>> getEmotionalTriggers(
     List<InsightDay> days,
   ) async {
@@ -305,6 +401,45 @@ class InsightsRepository {
       longest = math.max(longest, current);
     }
     return longest;
+  }
+
+  int _longestHabitStreak(List<InsightDay> days) {
+    DateTime? previous;
+    var current = 0;
+    var longest = 0;
+    for (final day in days) {
+      final currentDate = DateUtils.dateOnly(day.date);
+      if (previous != null && currentDate.difference(previous).inDays > 1) {
+        current = 0;
+      }
+      current = day.habitRate > 0 ? current + 1 : 0;
+      longest = math.max(longest, current);
+      previous = currentDate;
+    }
+    return longest;
+  }
+
+  ({double start, double end, double delta}) _energyShift(
+    List<InsightDay> days,
+  ) {
+    final usable = days.where((day) => day.energy > 0).toList();
+    if (usable.length < 2) {
+      return (start: 0, end: 0, delta: 0);
+    }
+    final segmentLength = math.max(1, (usable.length / 3).ceil());
+    final start = _averageEnergy(usable.take(segmentLength));
+    final end = _averageEnergy(
+      usable.skip(math.max(0, usable.length - segmentLength)),
+    );
+    return (start: start, end: end, delta: end - start);
+  }
+
+  double _averageEnergy(Iterable<InsightDay> days) {
+    final values = days.map((day) => day.energy).where((value) => value > 0);
+    if (values.isEmpty) {
+      return 0;
+    }
+    return values.reduce((a, b) => a + b) / values.length;
   }
 }
 

@@ -41,6 +41,7 @@ class _LuminaButtonState extends State<LuminaButton> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final canvas = context.livingCanvas;
     final background = widget.outlined
         ? Colors.transparent
         : colors.primaryAccent;
@@ -52,10 +53,10 @@ class _LuminaButtonState extends State<LuminaButton> {
 
     return AnimatedScale(
       scale: _pressed ? AppMotion.pressedScale : 1,
-      duration: AppMotion.instant,
-      curve: AppMotion.enter,
+      duration: canvas.instant,
+      curve: canvas.curve,
       child: AnimatedOpacity(
-        duration: AppMotion.fast,
+        duration: canvas.fast,
         opacity: _isEnabled ? 1 : 0.4,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

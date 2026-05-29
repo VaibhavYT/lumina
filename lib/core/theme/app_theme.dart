@@ -3,22 +3,34 @@ import 'package:lumina/core/theme/app_colors.dart';
 import 'package:lumina/core/theme/app_radius.dart';
 import 'package:lumina/core/theme/app_shadows.dart';
 import 'package:lumina/core/theme/app_typography.dart';
+import 'package:lumina/core/theme/living_canvas.dart';
 
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData get dark =>
-      _buildTheme(colors: AppColors.dark, brightness: Brightness.dark);
+  static ThemeData get dark => darkFor(LivingCanvas.resolve(DateTime.now()));
 
-  static ThemeData get light =>
-      _buildTheme(colors: AppColors.light, brightness: Brightness.light);
+  static ThemeData get light => lightFor(LivingCanvas.resolve(DateTime.now()));
+
+  static ThemeData darkFor(LivingCanvas canvas) => _buildTheme(
+    colors: canvas.colorsFor(AppColors.dark, Brightness.dark),
+    brightness: Brightness.dark,
+    canvas: canvas,
+  );
+
+  static ThemeData lightFor(LivingCanvas canvas) => _buildTheme(
+    colors: canvas.colorsFor(AppColors.light, Brightness.light),
+    brightness: Brightness.light,
+    canvas: canvas,
+  );
 
   static ThemeData _buildTheme({
     required AppColors colors,
     required Brightness brightness,
+    required LivingCanvas canvas,
   }) {
     final isDark = brightness == Brightness.dark;
-    final textTheme = AppTypography.textTheme(colors);
+    final textTheme = AppTypography.textTheme(colors, canvas: canvas);
 
     return ThemeData(
       useMaterial3: true,
@@ -36,7 +48,7 @@ class AppTheme {
         onSurface: colors.textPrimary,
       ),
       textTheme: textTheme,
-      extensions: <ThemeExtension<dynamic>>[colors],
+      extensions: <ThemeExtension<dynamic>>[colors, canvas],
       appBarTheme: AppBarTheme(
         elevation: 0,
         centerTitle: true,

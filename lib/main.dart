@@ -7,6 +7,7 @@ import 'package:lumina/core/constants/app_constants.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/services/notification_service.dart';
 import 'package:lumina/core/theme/app_theme.dart';
+import 'package:lumina/core/theme/living_canvas.dart';
 import 'package:lumina/core/theme/theme_provider.dart';
 import 'package:lumina/router/app_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -63,12 +64,15 @@ class AppRoot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
     final router = ref.watch(appRouterProvider);
+    final canvas =
+        ref.watch(livingCanvasProvider).valueOrNull ??
+        LivingCanvas.resolve(DateTime.now());
 
     return MaterialApp.router(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightFor(canvas),
+      darkTheme: AppTheme.darkFor(canvas),
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
