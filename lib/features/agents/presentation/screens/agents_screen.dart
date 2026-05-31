@@ -12,6 +12,7 @@ import 'package:lumina/features/agents/data/repositories/agents_repository.dart'
 import 'package:lumina/features/agents/presentation/providers/agents_notifier.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
 import 'package:lumina/shared/widgets/shimmer_loader.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 class AgentsScreen extends ConsumerWidget {
   const AgentsScreen({super.key});
@@ -50,10 +51,12 @@ class AgentsScreen extends ConsumerWidget {
                     children: [
                       _AgentsHeader(state: state),
                       const SizedBox(height: AppSpacing.sectionGap),
+                      _CrewStudioPanel(state: state),
+                      const SizedBox(height: AppSpacing.md),
                       _LiveOperationsPanel(state: state),
                       const SizedBox(height: AppSpacing.sectionGap),
                       Text(
-                        'Agent Network',
+                        'Meet the crew',
                         style: context.textTheme.headlineMedium,
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -93,7 +96,7 @@ class _AgentsHeader extends StatelessWidget {
         Text('Agents', style: context.textTheme.displayMedium),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Real backend workers watching your logs, goals, and mentor context.',
+          'A small crew keeping watch over the patterns you care about.',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: context.textTheme.bodyMedium?.copyWith(
@@ -112,7 +115,7 @@ class _AgentsHeader extends StatelessWidget {
             ),
             _SignalPill(
               icon: Icons.bolt,
-              label: '${state.signalCount} live signals',
+              label: '${state.signalCount} notes and signals',
               color: colors.secondaryAccent,
             ),
             if (state.activeGoalTitle != null)
@@ -124,6 +127,240 @@ class _AgentsHeader extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _CrewStudioPanel extends StatefulWidget {
+  const _CrewStudioPanel({required this.state});
+
+  final AgentsState state;
+
+  @override
+  State<_CrewStudioPanel> createState() => _CrewStudioPanelState();
+}
+
+class _CrewStudioPanelState extends State<_CrewStudioPanel> {
+  var _selectedIndex = 0;
+
+  LuminaAgent get _selectedAgent {
+    return widget.state.agents[_selectedIndex.clamp(
+      0,
+      widget.state.agents.length - 1,
+    )];
+  }
+
+  @override
+  void didUpdateWidget(covariant _CrewStudioPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selectedIndex >= widget.state.agents.length) {
+      _selectedIndex = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final agent = _selectedAgent;
+    final notes = widget.state.agents
+        .where((item) => item.latestResult != null)
+        .length;
+
+    return LuminaCard(
+      borderRadius: AppRadius.radiusXl,
+      backgroundColor: colors.backgroundElevated,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Lumina studio', style: context.textTheme.titleLarge),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '$notes fresh notes waiting for you',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _StatusChip(status: agent.status),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 100,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: widget.state.agents.length,
+              separatorBuilder: (context, index) =>
+                  const SizedBox(width: AppSpacing.sm),
+              itemBuilder: (context, index) {
+                final item = widget.state.agents[index];
+                return _CrewMateButton(
+                  agent: item,
+                  selected: index == _selectedIndex,
+                  onTap: () => setState(() => _selectedIndex = index),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AnimatedSwitcher(
+            duration: AppMotion.standard,
+            switchInCurve: AppMotion.enter,
+            switchOutCurve: AppMotion.exit,
+            child: _AgentNotePreview(
+              key: ValueKey('${agent.id}-${agent.latestResult?.createdAt}'),
+              agent: agent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CrewMateButton extends StatelessWidget {
+  const _CrewMateButton({
+    required this.agent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final LuminaAgent agent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.standardCurve,
+        width: 74,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: selected ? colors.primaryAccentSoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.radiusLg),
+          border: Border.all(
+            color: selected ? colors.primaryAccent : Colors.transparent,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AgentSprite(agent: agent, size: 56, selected: selected),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              agent.name.split(' ').first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.labelSmall?.copyWith(
+                color: selected
+                    ? colors.primaryAccent
+                    : colors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentNotePreview extends StatelessWidget {
+  const _AgentNotePreview({super.key, required this.agent});
+
+  final LuminaAgent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final result = agent.latestResult;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.radiusLg),
+        border: Border.all(color: colors.divider),
+      ),
+      child: result == null
+          ? Column(
+              key: const ValueKey('quiet'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${agent.name} is listening quietly.',
+                  style: context.textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  agent.nextRunLabel,
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              key: const ValueKey('note'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      PhosphorIcons.notePencil(PhosphorIconsStyle.fill),
+                      color: colors.primaryAccent,
+                      size: 16,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        result.label,
+                        style: context.textTheme.labelSmall?.copyWith(
+                          color: colors.primaryAccent,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _relativeTime(result.createdAt),
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: colors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  result.headline,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  result.body,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    color: colors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -153,12 +390,12 @@ class _LiveOperationsPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Live Operations',
+                  'Studio pulse',
                   style: context.textTheme.headlineMedium,
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '${state.recentlyActiveCount} ran recently. ${state.agents.length} agents are wired to backend signals.',
+                  '${state.recentlyActiveCount} helpers checked in recently. The studio listens for your logs, goals, and questions.',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: context.textTheme.bodyMedium?.copyWith(
@@ -187,33 +424,34 @@ class _LiveOperationsPanel extends StatelessWidget {
   }
 }
 
-class _AgentCard extends StatelessWidget {
+class _AgentCard extends StatefulWidget {
   const _AgentCard({required this.agent});
 
   final LuminaAgent agent;
 
   @override
+  State<_AgentCard> createState() => _AgentCardState();
+}
+
+class _AgentCardState extends State<_AgentCard> {
+  var _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final agent = widget.agent;
     final tone = _statusColor(context, agent.status);
 
     return LuminaCard(
       borderRadius: AppRadius.radiusXl,
+      onTap: () => setState(() => _expanded = !_expanded),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(AppRadius.radiusMd),
-                ),
-                child: Icon(_agentIcon(agent.id), color: tone, size: 25),
-              ),
+              _AgentSprite(agent: agent, size: 58),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -231,8 +469,14 @@ class _AgentCard extends StatelessWidget {
                         ),
                         IconButton(
                           tooltip: 'About ${agent.name}',
-                          onPressed: () => _showAgentInfo(context, agent),
-                          icon: const Icon(Icons.info_outline, size: 20),
+                          onPressed: () => _showAgentInfo(
+                            context,
+                            agent,
+                          ),
+                          icon: Icon(
+                            PhosphorIcons.info(),
+                            size: 20,
+                          ),
                           color: colors.textSecondary,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
@@ -261,7 +505,11 @@ class _AgentCard extends StatelessWidget {
             runSpacing: AppSpacing.sm,
             children: [
               _StatusChip(status: agent.status),
-              _FunctionChip(label: agent.functionName),
+              _FunctionChip(
+                label: agent.latestResult == null
+                    ? 'Quiet for now'
+                    : '${agent.resultCount} ${agent.resultCount == 1 ? 'note' : 'notes'}',
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -275,19 +523,265 @@ class _AgentCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _OperationLine(
-            icon: Icons.history,
+            icon: PhosphorIcons.clockCounterClockwise(),
             label: 'Last run',
             value: _relativeTime(agent.lastRunAt),
           ),
           const SizedBox(height: AppSpacing.sm),
           _OperationLine(
-            icon: Icons.timeline,
+            icon: PhosphorIcons.waveform(),
             label: 'Next',
             value: agent.nextRunAt == null
                 ? agent.nextRunLabel
                 : '${agent.nextRunLabel} - ${_formatNextRun(agent.nextRunAt!)}',
           ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Icon(
+                agent.latestResult == null
+                    ? PhosphorIcons.ear()
+                    : PhosphorIcons.notePencil(),
+                color: tone,
+                size: 17,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  agent.latestResult == null
+                      ? 'Listening for a useful signal'
+                      : '${agent.resultCount} ${agent.resultCount == 1 ? 'note' : 'notes'} ready',
+                  style: context.textTheme.labelSmall?.copyWith(color: tone),
+                ),
+              ),
+              AnimatedRotation(
+                duration: AppMotion.fast,
+                turns: _expanded ? 0.5 : 0,
+                child: Icon(
+                  PhosphorIcons.caretDown(),
+                  color: colors.textTertiary,
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+          AnimatedSize(
+            duration: AppMotion.standard,
+            curve: AppMotion.standardCurve,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: _AgentResultReveal(agent: agent),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _AgentResultReveal extends StatelessWidget {
+  const _AgentResultReveal({required this.agent});
+
+  final LuminaAgent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final result = agent.latestResult;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.radiusLg),
+        border: Border.all(color: colors.divider),
+      ),
+      child: result == null
+          ? Text(
+              '${agent.name} has not left a note yet. ${agent.nextRunLabel}.',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: colors.textSecondary,
+                height: 1.45,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      result.label,
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: colors.primaryAccent,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _relativeTime(result.createdAt),
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: colors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(result.headline, style: context.textTheme.titleLarge),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  result.body,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    color: colors.textSecondary,
+                    height: 1.55,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _AgentSprite extends StatefulWidget {
+  const _AgentSprite({
+    required this.agent,
+    required this.size,
+    this.selected = false,
+  });
+
+  final LuminaAgent agent;
+  final double size;
+  final bool selected;
+
+  @override
+  State<_AgentSprite> createState() => _AgentSpriteState();
+}
+
+class _AgentSpriteState extends State<_AgentSprite>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 2100 + widget.agent.id.length * 90),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final tone = _agentTone(context, widget.agent.id);
+
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final lift = math.sin(_controller.value * math.pi) * 3.2;
+          final blink = _controller.value > 0.94 ? 0.28 : 1.0;
+          return Transform.translate(
+            offset: Offset(0, -lift),
+            child: SizedBox(
+              width: widget.size,
+              height: widget.size,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: AnimatedContainer(
+                      duration: AppMotion.fast,
+                      decoration: BoxDecoration(
+                        color: tone.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(
+                          widget.size * 0.36,
+                        ),
+                        border: Border.all(
+                          color: tone.withValues(
+                            alpha: widget.selected ? 0.92 : 0.34,
+                          ),
+                          width: widget.selected ? 1.6 : 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: tone.withValues(
+                              alpha: widget.selected ? 0.20 : 0.08,
+                            ),
+                            blurRadius: widget.selected ? 18 : 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: const Alignment(0, -0.30),
+                    child: Icon(
+                      _agentIcon(widget.agent.id),
+                      color: tone,
+                      size: widget.size * 0.38,
+                    ),
+                  ),
+                  Positioned(
+                    left: widget.size * 0.31,
+                    bottom: widget.size * 0.20,
+                    child: _SpriteEye(tone: tone, blink: blink),
+                  ),
+                  Positioned(
+                    right: widget.size * 0.31,
+                    bottom: widget.size * 0.20,
+                    child: _SpriteEye(tone: tone, blink: blink),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: widget.size * 0.24,
+                      height: widget.size * 0.24,
+                      decoration: BoxDecoration(
+                        color: colors.backgroundCard,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colors.backgroundCard),
+                      ),
+                      alignment: Alignment.center,
+                      child: _StatusDot(
+                        color: _statusColor(context, widget.agent.status),
+                        animate: widget.agent.status != AgentStatus.waiting,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SpriteEye extends StatelessWidget {
+  const _SpriteEye({required this.tone, required this.blink});
+
+  final Color tone;
+  final double blink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 3.4,
+      height: 4.6 * blink,
+      decoration: BoxDecoration(
+        color: tone,
+        borderRadius: BorderRadius.circular(AppRadius.radiusFull),
       ),
     );
   }
@@ -735,7 +1229,7 @@ void _showAgentInfo(BuildContext context, LuminaAgent agent) {
               const SizedBox(height: AppSpacing.lg),
               Row(
                 children: [
-                  Icon(_agentIcon(agent.id), color: colors.primaryAccent),
+                  _AgentSprite(agent: agent, size: 54, selected: true),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -762,6 +1256,17 @@ void _showAgentInfo(BuildContext context, LuminaAgent agent) {
                     ? agent.nextRunLabel
                     : _formatNextRun(agent.nextRunAt!),
               ),
+              if (agent.latestResult != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Latest note',
+                  style: context.textTheme.labelLarge?.copyWith(
+                    color: colors.primaryAccent,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _AgentResultReveal(agent: agent),
+              ],
             ],
           ),
         ),
@@ -825,14 +1330,28 @@ String _statusLabel(AgentStatus status) {
 
 IconData _agentIcon(String id) {
   return switch (id) {
-    'morning' => Icons.wb_sunny_outlined,
-    'burnout' => Icons.health_and_safety_outlined,
-    'patterns' => Icons.insights_outlined,
-    'goal' => Icons.route_outlined,
-    'mentor' => Icons.chat_bubble_outline,
-    'reflection' => Icons.note_alt_outlined,
-    'weekly' => Icons.event_available_outlined,
-    _ => Icons.view_week_outlined,
+    'morning' => PhosphorIcons.sunHorizon(PhosphorIconsStyle.duotone),
+    'burnout' => PhosphorIcons.shieldCheck(PhosphorIconsStyle.duotone),
+    'patterns' => PhosphorIcons.sparkle(PhosphorIconsStyle.duotone),
+    'goal' => PhosphorIcons.mapTrifold(PhosphorIconsStyle.duotone),
+    'mentor' => PhosphorIcons.chatCircleDots(PhosphorIconsStyle.duotone),
+    'reflection' => PhosphorIcons.notebook(PhosphorIconsStyle.duotone),
+    'weekly' => PhosphorIcons.calendarCheck(PhosphorIconsStyle.duotone),
+    _ => PhosphorIcons.calendarDots(PhosphorIconsStyle.duotone),
+  };
+}
+
+Color _agentTone(BuildContext context, String id) {
+  final colors = context.colors;
+  return switch (id) {
+    'morning' => colors.primaryAccent,
+    'burnout' => colors.errorColor,
+    'patterns' => colors.secondaryAccent,
+    'goal' => colors.successColor,
+    'mentor' => colors.primaryAccent,
+    'reflection' => colors.secondaryAccent,
+    'weekly' => colors.successColor,
+    _ => colors.primaryAccent,
   };
 }
 

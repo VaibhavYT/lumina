@@ -86,7 +86,7 @@ async function fetchAgents(supabase: any, deviceId: string) {
       .order("generated_at", { ascending: false })
       .limit(80),
     supabase.from("mentor_chat_messages")
-      .select("id, role, metadata, created_at")
+      .select("id, role, content, metadata, created_at")
       .eq("device_id", deviceId)
       .eq("role", "assistant")
       .order("created_at", { ascending: false })
@@ -98,7 +98,7 @@ async function fetchAgents(supabase: any, deviceId: string) {
       .limit(1)
       .maybeSingle(),
     supabase.from("goals")
-      .select("id, title, created_at, updated_at")
+      .select("id, title, description, target_date, created_at, updated_at")
       .eq("device_id", deviceId)
       .eq("status", "active")
       .order("created_at", { ascending: false })
