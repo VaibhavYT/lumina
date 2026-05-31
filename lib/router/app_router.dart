@@ -11,6 +11,9 @@ import 'package:lumina/features/insights/presentation/screens/insights_screen.da
 import 'package:lumina/features/log/presentation/screens/daily_log_screen.dart';
 import 'package:lumina/features/mentor/presentation/screens/mentor_screen.dart';
 import 'package:lumina/features/mentor/presentation/screens/untangle_screen.dart';
+import 'package:lumina/features/onboarding/data/onboarding_repository.dart';
+import 'package:lumina/features/onboarding/presentation/screens/onboarding_screen.dart';
+import 'package:lumina/features/onboarding/presentation/screens/splash_screen.dart';
 import 'package:lumina/features/settings/presentation/screens/settings_screen.dart';
 import 'package:lumina/router/app_shell.dart';
 import 'package:lumina/shared/animations/fade_slide_transition.dart';
@@ -26,11 +29,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/',
+    initialLocation: '/splash',
     refreshListenable: authRefresh,
     redirect: (context, state) {
       final path = state.uri.path;
       final isAuthRoute = path == '/auth';
+      final isSplashRoute = path == '/splash';
+      final isOnboardingRoute = path == '/onboarding';
+      final onboardingComplete = const OnboardingRepository().hasCompleted;
+
+      if (isSplashRoute) {
+        return null;
+      }
+      if (!onboardingComplete && !isOnboardingRoute) {
+        return '/onboarding';
+      }
+      if (onboardingComplete && isOnboardingRoute) {
+        return '/';
+      }
 
       if (!authRepository.isAvailable) {
         if (path == '/' || isAuthRoute) {
@@ -53,6 +69,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        pageBuilder: (context, state) =>
+            fadeSlidePage(key: state.pageKey, child: const SplashScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (context, state) =>
+            fadeSlidePage(key: state.pageKey, child: const OnboardingScreen()),
+      ),
       GoRoute(
         path: '/auth',
         pageBuilder: (context, state) =>
