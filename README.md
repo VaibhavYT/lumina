@@ -143,6 +143,50 @@ flutter run
 
 ---
 
+## ⚡ Deployment & Supabase Edge Functions
 
+Lumina's intelligent background services reside in secure Supabase Deno environments.
+
+### Setting Up Secrets
+Ensure the following secrets are configured in your Supabase dashboard or via the CLI before executing functions:
+```bash
+supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+supabase secrets set FCM_SERVER_KEY=your_firebase_messaging_key
+```
+
+### Function Deployment
+Deploy all agent functions using the Supabase CLI:
+```bash
+supabase functions deploy pattern-mining-agent
+supabase functions deploy weekly-debrief-agent
+supabase functions deploy burnout-interception-agent
+supabase functions deploy morning-brief-agent
+supabase functions deploy goal-decomposition-agent
+```
+
+### Nightly & Weekly Cron Setup
+Run the SQL queries located in the database migrations or copy them directly into the Supabase SQL editor to schedule the cron tasks.
+```sql
+-- Example schedule for Pattern Mining Agent (Nightly at 11:30 PM IST / 18:00 UTC)
+SELECT cron.schedule(
+  'nightly-pattern-mining',
+  '30 18 * * *',
+  $$
+  SELECT net.http_post(
+    url := current_setting('app.supabase_url') || '/functions/v1/pattern-mining-agent',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.service_role_key') || '"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](file:///v:/Flutter_26/lumina/LICENSE) file for details.
+
+---
 
 *Crafted with absolute obsession by the Lumina Product Studio. Changing the standard of personal self-awareness.*
