@@ -1016,7 +1016,7 @@ class NotableStreaksRow extends StatelessWidget {
           final card = cards[index];
           return Container(
             width: 148,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: card.$4.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(AppRadius.radiusLg),
