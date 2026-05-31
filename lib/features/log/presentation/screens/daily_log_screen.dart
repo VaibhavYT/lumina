@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/core/utils/haptic_utils.dart';
+import 'package:lumina/features/dashboard/presentation/providers/dashboard_notifier.dart';
+import 'package:lumina/features/goals/presentation/providers/goal_notifier.dart';
 import 'package:lumina/features/log/presentation/providers/today_log_notifier.dart';
 import 'package:lumina/features/log/presentation/widgets/daily_log_widgets.dart';
 import 'package:lumina/shared/widgets/shimmer_loader.dart';
@@ -119,7 +121,16 @@ class _DailyLogScreenState extends ConsumerState<DailyLogScreen> {
                               tasks: state.log.tasks,
                               onAddTask: notifier.addTask,
                               onToggleTask: notifier.toggleTask,
-                              onDeleteTask: notifier.deleteTask,
+                              onDeleteTask: (taskId) async {
+                                final deleted = await notifier.deleteTask(
+                                  taskId,
+                                );
+                                if (deleted) {
+                                  ref.invalidate(dashboardNotifierProvider);
+                                  ref.invalidate(goalNotifierProvider);
+                                }
+                                return deleted;
+                              },
                               onReorder: notifier.reorderTasks,
                             ),
                             const SizedBox(height: AppSpacing.sectionGap),

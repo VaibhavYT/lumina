@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lumina/features/dashboard/presentation/providers/dashboard_notifier.dart';
 import 'package:lumina/features/goals/data/repositories/goal_repository.dart';
 import 'package:lumina/features/log/presentation/providers/today_log_notifier.dart';
 
@@ -86,7 +87,9 @@ class GoalNotifier extends AsyncNotifier<GoalState> {
 
   Future<void> deleteGoal(String goalId) async {
     await _repository.deleteGoal(goalId);
+    await ref.read(logRepositoryProvider).removeGoalTasksFromCache(goalId);
     ref.invalidate(todayLogNotifierProvider);
+    ref.invalidate(dashboardNotifierProvider);
     state = const AsyncData(
       GoalState(
         snapshot: GoalSnapshot(goal: null, milestones: [], stats: null),

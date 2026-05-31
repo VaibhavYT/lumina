@@ -120,9 +120,29 @@ class LogRepository {
     if (log == null) {
       return;
     }
-    await saveDailyLog(
+    await _syncService.deleteTask(id);
+    await _cacheDailyLog(
       log.copyWith(tasks: log.tasks.where((task) => task.id != id).toList()),
     );
+  }
+
+  Future<void> removeGoalTasksFromCache(String goalId) async {
+    final box = await _logBox();
+    final deviceId = await _identityService.getDeviceId();
+    final prefix = 'log.$deviceId.';
+    for (final key in box.keys.whereType<String>().where(
+      (key) => key.startsWith(prefix),
+    )) {
+      final raw = box.get(key);
+      if (raw is! Map) {
+        continue;
+      }
+      final log = DailyLog.fromJson(raw);
+      final tasks = log.tasks.where((task) => task.goalId != goalId).toList();
+      if (tasks.length != log.tasks.length) {
+        await box.put(key, log.copyWith(tasks: tasks).toJson());
+      }
+    }
   }
 
   Future<void> checkHabit(String habitId) async {

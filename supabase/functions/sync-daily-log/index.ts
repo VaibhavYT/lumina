@@ -98,6 +98,22 @@ Deno.serve(async (req) => {
     const completedHabitIds = hasCompletedHabitSnapshot
       ? (payload.completedHabitIds as unknown[]).map(asString).filter(isString)
       : [];
+    const deletedTaskIds = Array.isArray(payload.deletedTaskIds)
+      ? (payload.deletedTaskIds as unknown[]).map(ensureUuid).filter(isString)
+      : [];
+
+    let deletedTasks = 0;
+    if (deletedTaskIds.length > 0) {
+      const { data, error } = await supabase.from("tasks")
+        .delete()
+        .eq("device_id", deviceId)
+        .in("id", deletedTaskIds)
+        .select("id");
+      if (error) {
+        throw new Error(`tasks delete failed: ${error.message}`);
+      }
+      deletedTasks = data?.length ?? 0;
+    }
 
     if (dailyLog) {
       const { error } = await supabase.from("daily_logs").upsert({
@@ -315,6 +331,7 @@ Deno.serve(async (req) => {
       synced: {
         dailyLog: Boolean(dailyLog),
         tasks: taskRows.length,
+        deletedTasks,
         habitCompletions: uuidCompletionRows.length + localCompletionRows.length,
       },
     });

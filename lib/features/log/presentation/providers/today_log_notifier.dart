@@ -119,14 +119,25 @@ class TodayLogNotifier extends AsyncNotifier<TodayLogState> {
     });
   }
 
-  void deleteTask(String id) {
-    _mutate((current) {
-      return current.copyWith(
-        log: current.log.copyWith(
-          tasks: current.log.tasks.where((task) => task.id != id).toList(),
+  Future<bool> deleteTask(String id) async {
+    final current = state.valueOrNull;
+    if (current == null) {
+      return false;
+    }
+    try {
+      await _repository.deleteTask(id);
+      state = AsyncData(
+        current.copyWith(
+          log: current.log.copyWith(
+            tasks: current.log.tasks.where((task) => task.id != id).toList(),
+          ),
+          savedToday: false,
         ),
       );
-    });
+      return true;
+    } on Object {
+      return false;
+    }
   }
 
   void reorderTasks(int oldIndex, int newIndex) {

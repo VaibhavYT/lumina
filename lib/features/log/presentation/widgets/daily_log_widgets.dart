@@ -593,7 +593,7 @@ class TasksEditorSection extends StatefulWidget {
   final List<Task> tasks;
   final void Function(String title, TaskPriority priority) onAddTask;
   final ValueChanged<String> onToggleTask;
-  final ValueChanged<String> onDeleteTask;
+  final Future<bool> Function(String taskId) onDeleteTask;
   final void Function(int oldIndex, int newIndex) onReorder;
 
   @override
@@ -681,7 +681,17 @@ class _TasksEditorSectionState extends State<TasksEditorSection> {
                 return Dismissible(
                   key: ValueKey(task.id),
                   direction: DismissDirection.endToStart,
-                  onDismissed: (_) => widget.onDeleteTask(task.id),
+                  confirmDismiss: (_) async {
+                    final deleted = await widget.onDeleteTask(task.id);
+                    if (!deleted && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not delete this task.'),
+                        ),
+                      );
+                    }
+                    return deleted;
+                  },
                   background: Container(
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: AppSpacing.md),

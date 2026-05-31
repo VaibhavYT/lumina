@@ -173,6 +173,14 @@ async function deleteGoalRecords(supabase: any, deviceId: string, goalIds: strin
     throw new Error(taskError.message);
   }
 
+  const { error: milestoneError } = await supabase.from("goal_milestones")
+    .delete()
+    .eq("device_id", deviceId)
+    .in("goal_id", goalIds);
+  if (milestoneError) {
+    throw new Error(milestoneError.message);
+  }
+
   const { error: goalError } = await supabase.from("goals")
     .delete()
     .eq("device_id", deviceId)

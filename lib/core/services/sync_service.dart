@@ -114,6 +114,21 @@ class SyncService {
     }
   }
 
+  Future<void> deleteTask(String taskId) async {
+    final deviceId = await _identityService.getDeviceId();
+    final result = await _edgeClient.invoke(
+      'sync-daily-log',
+      payload: {
+        'deviceId': deviceId,
+        'deletedTaskIds': [taskId],
+      },
+      headers: {'x-device-id': deviceId},
+    );
+    if (!result.isSuccess) {
+      throw StateError(result.error ?? 'Task deletion failed.');
+    }
+  }
+
   Future<void> syncHabits(List<HabitProgress> habits) async {
     try {
       final deviceId = await _identityService.getDeviceId();
