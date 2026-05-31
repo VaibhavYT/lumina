@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
+import 'package:lumina/features/log/presentation/providers/today_log_notifier.dart';
 import 'package:lumina/features/mentor/presentation/providers/mentor_notifier.dart';
 import 'package:lumina/features/mentor/presentation/widgets/mentor_widgets.dart';
 import 'package:lumina/shared/widgets/shimmer_loader.dart';
@@ -13,6 +14,11 @@ class MentorScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(mentorNotifierProvider);
+    final log = ref.watch(todayLogNotifierProvider).valueOrNull?.log;
+    final readingProfile = MentorReadingProfile(
+      mood: log?.mood,
+      energy: log?.energy,
+    );
 
     return Scaffold(
       backgroundColor: context.colors.backgroundPrimary,
@@ -42,7 +48,10 @@ class MentorScreen extends ConsumerWidget {
                     children: [
                       const MentorHeader(),
                       const SizedBox(height: AppSpacing.sectionGap),
-                      DailyReflectionCard(insight: state.dailyReflection),
+                      DailyReflectionCard(
+                        insight: state.dailyReflection,
+                        readingProfile: readingProfile,
+                      ),
                       const SizedBox(height: AppSpacing.sectionGap),
                       UntangleEntryCard(
                         onStart: () => context.push('/mentor/untangle'),
@@ -67,11 +76,16 @@ class MentorScreen extends ConsumerWidget {
                         selectedDate: state.selectedDate,
                         isLoading: state.isFeedLoading,
                         onDismiss: notifier.dismiss,
+                        readingProfile: readingProfile,
                       ),
                       const SizedBox(height: AppSpacing.sectionGap),
                       AskMentorComposer(
-                        onSubmit: (question) =>
-                            _openMentorChat(context, ref, question),
+                        onSubmit: (question) => _openMentorChat(
+                          context,
+                          ref,
+                          question,
+                          readingProfile,
+                        ),
                       ),
                     ],
                   ),
@@ -85,7 +99,12 @@ class MentorScreen extends ConsumerWidget {
   }
 }
 
-void _openMentorChat(BuildContext context, WidgetRef ref, String question) {
+void _openMentorChat(
+  BuildContext context,
+  WidgetRef ref,
+  String question,
+  MentorReadingProfile readingProfile,
+) {
   final trimmed = question.trim();
   if (trimmed.isEmpty) {
     return;
@@ -99,6 +118,7 @@ void _openMentorChat(BuildContext context, WidgetRef ref, String question) {
       return MentorChatSheet(
         initialQuestion: trimmed,
         repository: ref.read(mentorRepositoryProvider),
+        readingProfile: readingProfile,
       );
     },
   );

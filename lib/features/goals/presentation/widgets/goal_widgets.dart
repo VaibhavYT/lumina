@@ -14,6 +14,10 @@ import 'package:lumina/shared/widgets/lumina_card.dart';
 import 'package:lumina/shared/widgets/lumina_tag.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+enum _GoalAction { edit, replace, delete }
+
+enum _GoalSheetMode { create, edit, replace }
+
 class GoalDashboardCard extends ConsumerWidget {
   const GoalDashboardCard({
     super.key,
@@ -62,7 +66,8 @@ class GoalDashboardCard extends ConsumerWidget {
             LuminaButton(
               label: 'Set a Goal ->',
               icon: PhosphorIcons.arrowRight(),
-              onPressed: () => _showGoalSheet(context, ref),
+              onPressed: () =>
+                  _showGoalSheet(context, mode: _GoalSheetMode.create),
             ),
           ],
         ),
@@ -75,11 +80,43 @@ class GoalDashboardCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LuminaTag(
-            label: 'Goal set',
-            color: colors.backgroundCard,
-            textColor: colors.primaryAccent,
-            icon: PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+          Row(
+            children: [
+              LuminaTag(
+                label: 'Goal set',
+                color: colors.backgroundCard,
+                textColor: colors.primaryAccent,
+                icon: PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+              ),
+              const Spacer(),
+              PopupMenuButton<_GoalAction>(
+                tooltip: 'Goal options',
+                color: colors.backgroundElevated,
+                icon: Icon(
+                  PhosphorIcons.dotsThreeVertical(PhosphorIconsStyle.bold),
+                  color: colors.textSecondary,
+                ),
+                onSelected: (action) =>
+                    _handleAction(context, ref, goal, action),
+                itemBuilder: (context) => [
+                  _goalMenuItem(
+                    _GoalAction.edit,
+                    'Edit goal',
+                    PhosphorIcons.pencilSimple(),
+                  ),
+                  _goalMenuItem(
+                    _GoalAction.replace,
+                    'Replace goal',
+                    PhosphorIcons.arrowsClockwise(),
+                  ),
+                  _goalMenuItem(
+                    _GoalAction.delete,
+                    'Delete goal',
+                    PhosphorIcons.trash(),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -112,7 +149,100 @@ class GoalDashboardCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _showGoalSheet(BuildContext context, WidgetRef ref) async {
+  PopupMenuItem<_GoalAction> _goalMenuItem(
+    _GoalAction value,
+    String label,
+    IconData icon,
+  ) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleAction(
+    BuildContext context,
+    WidgetRef ref,
+    ActiveGoal goal,
+    _GoalAction action,
+  ) async {
+    switch (action) {
+      case _GoalAction.edit:
+        await _showGoalSheet(
+          context,
+          mode: _GoalSheetMode.edit,
+          existingGoal: goal,
+        );
+        return;
+      case _GoalAction.replace:
+        await _showGoalSheet(
+          context,
+          mode: _GoalSheetMode.replace,
+          existingGoal: goal,
+        );
+        return;
+      case _GoalAction.delete:
+        await _deleteGoal(context, ref, goal);
+        return;
+    }
+  }
+
+  Future<void> _deleteGoal(
+    BuildContext context,
+    WidgetRef ref,
+    ActiveGoal goal,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this goal?'),
+        content: const Text(
+          'Lumina will remove its generated tasks from your daily plan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await ref.read(goalNotifierProvider.notifier).deleteGoal(goal.id);
+      if (!context.mounted) {
+        return;
+      }
+      onGoalChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Goal and generated tasks deleted.')),
+      );
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete the goal.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showGoalSheet(
+    BuildContext context, {
+    required _GoalSheetMode mode,
+    ActiveGoal? existingGoal,
+  }) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -122,7 +252,11 @@ class GoalDashboardCard extends ConsumerWidget {
           top: Radius.circular(AppRadius.radiusXl),
         ),
       ),
-      builder: (context) => _GoalSheet(onGoalChanged: onGoalChanged),
+      builder: (context) => _GoalSheet(
+        mode: mode,
+        existingGoal: existingGoal,
+        onGoalChanged: onGoalChanged,
+      ),
     );
   }
 }
@@ -261,9 +395,15 @@ class GoalProgressCard extends StatelessWidget {
 }
 
 class _GoalSheet extends ConsumerStatefulWidget {
-  const _GoalSheet({required this.onGoalChanged});
+  const _GoalSheet({
+    required this.mode,
+    required this.onGoalChanged,
+    this.existingGoal,
+  });
 
+  final _GoalSheetMode mode;
   final VoidCallback onGoalChanged;
+  final ActiveGoal? existingGoal;
 
   @override
   ConsumerState<_GoalSheet> createState() => _GoalSheetState();
@@ -284,6 +424,15 @@ class _GoalSheetState extends ConsumerState<_GoalSheet> {
   Timer? _timer;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.mode == _GoalSheetMode.edit && widget.existingGoal != null) {
+      _goalController.text = widget.existingGoal!.title;
+      _targetDate = widget.existingGoal!.targetDate;
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     _goalController.dispose();
@@ -292,10 +441,16 @@ class _GoalSheetState extends ConsumerState<_GoalSheet> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 1));
     final picked = await showDatePicker(
       context: context,
-      initialDate: _targetDate,
-      firstDate: DateTime.now().add(const Duration(days: 1)),
+      initialDate: _targetDate.isBefore(firstDate) ? firstDate : _targetDate,
+      firstDate: firstDate,
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) {
@@ -327,19 +482,42 @@ class _GoalSheetState extends ConsumerState<_GoalSheet> {
     });
 
     try {
-      await ref
-          .read(goalNotifierProvider.notifier)
-          .setGoal(
+      final notifier = ref.read(goalNotifierProvider.notifier);
+      switch (widget.mode) {
+        case _GoalSheetMode.create:
+          await notifier.setGoal(
             title: title,
             targetDate: _targetDate,
             context: _contextController.text,
           );
+          break;
+        case _GoalSheetMode.edit:
+          await notifier.updateGoal(
+            goalId: widget.existingGoal!.id,
+            title: title,
+            targetDate: _targetDate,
+            context: _contextController.text,
+          );
+          break;
+        case _GoalSheetMode.replace:
+          await notifier.replaceGoal(
+            goalId: widget.existingGoal!.id,
+            title: title,
+            targetDate: _targetDate,
+            context: _contextController.text,
+          );
+          break;
+      }
       if (!mounted) {
         return;
       }
       widget.onGoalChanged();
       Navigator.of(context).pop();
-      _showSnack('Goal set. Your first tasks are ready.');
+      _showSnack(
+        widget.mode == _GoalSheetMode.create
+            ? 'Goal set. Your first tasks are ready.'
+            : 'Goal updated. Your daily tasks were refreshed.',
+      );
     } on Object {
       if (mounted) {
         _showSnack(
@@ -398,10 +576,11 @@ class _GoalSheetState extends ConsumerState<_GoalSheet> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text(
-                  'What do you want to achieve?',
-                  style: context.textTheme.headlineMedium,
-                ),
+                Text(switch (widget.mode) {
+                  _GoalSheetMode.create => 'What do you want to achieve?',
+                  _GoalSheetMode.edit => 'Refine your goal',
+                  _GoalSheetMode.replace => 'Set a new goal',
+                }, style: context.textTheme.headlineMedium),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: _goalController,
@@ -453,7 +632,11 @@ class _GoalSheetState extends ConsumerState<_GoalSheet> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 LuminaButton(
-                  label: 'Let Lumina Plan This ->',
+                  label: switch (widget.mode) {
+                    _GoalSheetMode.create => 'Let Lumina Plan This ->',
+                    _GoalSheetMode.edit => 'Update Goal ->',
+                    _GoalSheetMode.replace => 'Replace Goal ->',
+                  },
                   isLoading: _isLoading,
                   onPressed: _isLoading ? null : _submit,
                   icon: PhosphorIcons.magicWand(),

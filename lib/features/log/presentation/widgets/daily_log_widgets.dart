@@ -8,6 +8,7 @@ import 'package:lumina/core/theme/app_motion.dart';
 import 'package:lumina/core/theme/app_radius.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/core/utils/haptic_utils.dart';
+import 'package:lumina/shared/widgets/goal_task_tag.dart';
 import 'package:lumina/shared/widgets/lumina_button.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -145,58 +146,180 @@ class MoodSelectorSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.radiusXl),
         border: Border.all(color: context.colors.divider),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text('Mood', style: context.textTheme.headlineMedium),
-          const SizedBox(height: AppSpacing.md),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              return FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: SizedBox(
-                  width: math.max(constraints.maxWidth, 340.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final mood in _moods)
-                        _MoodBubble(
-                          option: mood,
-                          isSelected: selectedMood == mood.level,
-                          onTap: () {
-                            HapticUtils.selection();
-                            onMoodChanged(mood.level);
-                          },
-                        ),
-                    ],
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.radiusXl),
+                child: RepaintBoundary(
+                  child: _MoodInkBloom(
+                    selectedMood: selectedMood,
+                    color: selected.color,
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
-          AnimatedSwitcher(
-            duration: AppMotion.fast,
-            child: selectedMood == null
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.md),
-                    child: TextField(
-                      controller: noteController,
-                      onChanged: onNoteChanged,
-                      minLines: 1,
-                      maxLines: 3,
-                      style: context.textTheme.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: "What's driving this feeling?",
-                        fillColor: selected.color.withValues(alpha: 0.08),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mood', style: context.textTheme.headlineMedium),
+              const SizedBox(height: AppSpacing.md),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: math.max(constraints.maxWidth, 340.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          for (final mood in _moods)
+                            _MoodBubble(
+                              option: mood,
+                              isSelected: selectedMood == mood.level,
+                              onTap: () {
+                                HapticUtils.selection();
+                                onMoodChanged(mood.level);
+                              },
+                            ),
+                        ],
                       ),
                     ),
-                  ),
+                  );
+                },
+              ),
+              AnimatedSwitcher(
+                duration: AppMotion.fast,
+                child: selectedMood == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        child: TextField(
+                          controller: noteController,
+                          onChanged: onNoteChanged,
+                          minLines: 1,
+                          maxLines: 3,
+                          style: context.textTheme.bodyMedium,
+                          decoration: InputDecoration(
+                            hintText: "What's driving this feeling?",
+                            fillColor: selected.color.withValues(alpha: 0.08),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+}
+
+class _MoodInkBloom extends StatefulWidget {
+  const _MoodInkBloom({required this.selectedMood, required this.color});
+
+  final int? selectedMood;
+  final Color color;
+
+  @override
+  State<_MoodInkBloom> createState() => _MoodInkBloomState();
+}
+
+class _MoodInkBloomState extends State<_MoodInkBloom>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 820),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _MoodInkBloom oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedMood != null &&
+        widget.selectedMood != oldWidget.selectedMood) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _MoodInkBloomPainter(
+            progress: _controller.value,
+            color: widget.color,
+            origin: Offset(((widget.selectedMood ?? 3) - 0.5) / 5, 0.36),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MoodInkBloomPainter extends CustomPainter {
+  const _MoodInkBloomPainter({
+    required this.progress,
+    required this.color,
+    required this.origin,
+  });
+
+  final double progress;
+  final Color color;
+  final Offset origin;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress == 0 || progress == 1) {
+      return;
+    }
+    final center = Offset(origin.dx * size.width, origin.dy * size.height);
+    final maxRadius = math.max(size.width, size.height) * 1.12;
+    final eased = Curves.easeOutCubic.transform(progress);
+    final opacity = math.sin(progress * math.pi);
+
+    for (var index = 0; index < 4; index++) {
+      final phase = index / 4 * math.pi * 2;
+      final swirl = (1 - progress) * (12 + index * 4);
+      final offset = Offset(math.cos(phase), math.sin(phase)) * swirl;
+      final radius = maxRadius * (0.18 + eased * (0.82 + index * 0.04));
+      final paint = Paint()
+        ..shader =
+            RadialGradient(
+              colors: [
+                color.withValues(alpha: opacity * (0.13 - index * 0.018)),
+                color.withValues(alpha: opacity * 0.045),
+                Colors.transparent,
+              ],
+              stops: const [0, 0.58, 1],
+            ).createShader(
+              Rect.fromCircle(center: center + offset, radius: radius),
+            );
+      canvas.drawCircle(center + offset, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MoodInkBloomPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.origin != origin;
   }
 }
 
@@ -729,6 +852,11 @@ class _EditableTaskRow extends StatelessWidget {
               ),
             ),
           ),
+          if (task.isGoalTask) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const GoalTaskTag(),
+          ],
+          const SizedBox(width: AppSpacing.sm),
           Container(
             width: 8,
             height: 8,

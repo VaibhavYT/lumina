@@ -130,7 +130,7 @@ async function fetchActiveGoal(supabase: any, deviceId: string, todayDate: strin
       .order("week_number", { ascending: true }),
     supabase.from("tasks").select("id, is_completed").eq("goal_id", goal.id),
     supabase.from("tasks")
-      .select("id, title, priority, is_completed, log_date")
+      .select("id, title, priority, is_completed, log_date, goal_id, metadata")
       .eq("goal_id", goal.id)
       .eq("log_date", todayDate)
       .order("sort_order", { ascending: true }),
@@ -158,6 +158,68 @@ async function fetchActiveGoal(supabase: any, deviceId: string, todayDate: strin
       currentMilestone,
     },
   };
+}
+
+async function deleteGoalRecords(supabase: any, deviceId: string, goalIds: string[]) {
+  if (goalIds.length === 0) {
+    return 0;
+  }
+
+  const { error: taskError } = await supabase.from("tasks")
+    .delete()
+    .eq("device_id", deviceId)
+    .in("goal_id", goalIds);
+  if (taskError) {
+    throw new Error(taskError.message);
+  }
+
+  const { error: goalError } = await supabase.from("goals")
+    .delete()
+    .eq("device_id", deviceId)
+    .in("id", goalIds);
+  if (goalError) {
+    throw new Error(goalError.message);
+  }
+
+  for (const goalId of goalIds) {
+    const { error: insightError } = await supabase.from("mentor_insights")
+      .delete()
+      .eq("device_id", deviceId)
+      .eq("insight_type", "goal_created")
+      .contains("metadata", { goalId });
+    if (insightError) {
+      console.error("goal insight cleanup skipped", deviceId, goalId, insightError.message);
+    }
+  }
+  return goalIds.length;
+}
+
+async function removeOtherActiveGoals(supabase: any, deviceId: string, keepGoalId: string) {
+  const { data, error } = await supabase.from("goals")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("status", "active")
+    .neq("id", keepGoalId);
+  if (error) {
+    throw new Error(error.message);
+  }
+  return deleteGoalRecords(supabase, deviceId, (data ?? []).map((goal: any) => goal.id));
+}
+
+async function deleteGoal(supabase: any, deviceId: string, goalId: string) {
+  const { data, error } = await supabase.from("goals")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("id", goalId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data) {
+    return jsonResponse({ success: true, deletedGoals: 0 });
+  }
+  const deletedGoals = await deleteGoalRecords(supabase, deviceId, [goalId]);
+  return jsonResponse({ success: true, deletedGoals });
 }
 
 async function createGoal(supabase: any, payload: Record<string, unknown>, deviceId: string) {
@@ -252,6 +314,7 @@ Rules:
   if (goalError) {
     throw new Error(goalError.message);
   }
+  await removeOtherActiveGoals(supabase, deviceId, goal.id);
 
   const milestones = plan.weeklyMilestones.map((milestone) => ({
     goal_id: goal.id,
@@ -279,7 +342,7 @@ Rules:
         priority: task.priority,
         goal_id: goal.id,
         is_completed: false,
-        metadata: { source: "goal_decomposition_agent" },
+        metadata: { source: "goal_decomposition_agent", tags: ["goal"] },
       });
     }
   }
@@ -364,6 +427,31 @@ Deno.serve(async (req) => {
       }
       const state = await fetchActiveGoal(supabase, deviceId, todayDate);
       return jsonResponse({ tasks: state.todaysTasks ?? [] });
+    }
+    if (action === "delete_goal") {
+      const goalId = asString(payload.goalId);
+      if (!deviceId || !goalId) {
+        return jsonResponse({ error: "device_id and goalId are required" }, 400);
+      }
+      return await deleteGoal(supabase, deviceId, goalId);
+    }
+    if (action === "update_goal" || action === "replace_goal") {
+      const goalId = asString(payload.goalId);
+      if (!deviceId || !goalId) {
+        return jsonResponse({ error: "device_id and goalId are required" }, 400);
+      }
+      const { data, error } = await supabase.from("goals")
+        .select("id")
+        .eq("device_id", deviceId)
+        .eq("id", goalId)
+        .maybeSingle();
+      if (error) {
+        throw new Error(error.message);
+      }
+      if (!data) {
+        return jsonResponse({ error: "Goal not found" }, 404);
+      }
+      return await createGoal(supabase, payload, deviceId);
     }
 
     return await createGoal(supabase, payload, deviceId);

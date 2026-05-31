@@ -9,6 +9,7 @@ import 'package:lumina/core/theme/app_radius.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/features/log/presentation/providers/today_log_notifier.dart';
 import 'package:lumina/features/mentor/data/repositories/mentor_repository.dart';
+import 'package:lumina/features/mentor/domain/mentor_input_policy.dart';
 import 'package:lumina/features/mentor/presentation/providers/mentor_notifier.dart';
 import 'package:lumina/shared/widgets/lumina_button.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
@@ -101,6 +102,16 @@ class _UntangleScreenState extends ConsumerState<UntangleScreen> {
   Future<void> _sendReply() async {
     final reply = _inputController.text.trim();
     if (reply.isEmpty || _isSending || _isSynthesizing) {
+      return;
+    }
+    final error = MentorInputPolicy.validate(
+      reply,
+      maxWords: MentorInputPolicy.untangleReplyMaxWords,
+    );
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -580,54 +591,78 @@ class _UntangleFooter extends StatelessWidget {
                   : const SizedBox.shrink(key: ValueKey('no-action')),
             ),
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 4),
             decoration: BoxDecoration(
               color: colors.backgroundCard,
               borderRadius: BorderRadius.circular(AppRadius.radiusXl),
               border: Border.all(color: colors.divider),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    minLines: 1,
-                    maxLines: 5,
-                    enabled: !isSending && !isSynthesizing,
-                    textInputAction: TextInputAction.newline,
-                    style: context.textTheme.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: hasStarted
-                          ? 'Answer the question...'
-                          : 'What feels tangled right now?',
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        minLines: 1,
+                        maxLines: 5,
+                        enabled: !isSending && !isSynthesizing,
+                        inputFormatters: const [
+                          MentorWordLimitFormatter(
+                            MentorInputPolicy.untangleReplyMaxWords,
+                          ),
+                        ],
+                        textInputAction: TextInputAction.newline,
+                        style: context.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          hintText: hasStarted
+                              ? 'Answer the question...'
+                              : 'What feels tangled right now?',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: AppSpacing.sm),
+                    GestureDetector(
+                      onTap: isSending || isSynthesizing ? null : onSend,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isSending || isSynthesizing
+                              ? colors.textTertiary
+                              : colors.primaryAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          PhosphorIcons.paperPlaneTilt(PhosphorIconsStyle.fill),
+                          color: context.isDark
+                              ? colors.backgroundPrimary
+                              : Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                GestureDetector(
-                  onTap: isSending || isSynthesizing ? null : onSend,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isSending || isSynthesizing
-                          ? colors.textTertiary
-                          : colors.primaryAccent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      PhosphorIcons.paperPlaneTilt(PhosphorIconsStyle.fill),
-                      color: context.isDark
-                          ? colors.backgroundPrimary
-                          : Colors.white,
-                      size: 18,
-                    ),
-                  ),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) {
+                    return Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '${MentorInputPolicy.wordCount(value.text)}/${MentorInputPolicy.untangleReplyMaxWords} words',
+                        style: context.textTheme.labelSmall?.copyWith(
+                          color: colors.textTertiary,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

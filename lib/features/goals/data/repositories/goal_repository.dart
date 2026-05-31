@@ -202,10 +202,68 @@ class GoalRepository {
     required DateTime targetDate,
     String? context,
   }) async {
+    return _planGoal(title: title, targetDate: targetDate, context: context);
+  }
+
+  Future<GoalPlanResult> updateGoal({
+    required String goalId,
+    required String title,
+    required DateTime targetDate,
+    String? context,
+  }) {
+    return _planGoal(
+      action: 'update_goal',
+      goalId: goalId,
+      title: title,
+      targetDate: targetDate,
+      context: context,
+    );
+  }
+
+  Future<GoalPlanResult> replaceGoal({
+    required String goalId,
+    required String title,
+    required DateTime targetDate,
+    String? context,
+  }) {
+    return _planGoal(
+      action: 'replace_goal',
+      goalId: goalId,
+      title: title,
+      targetDate: targetDate,
+      context: context,
+    );
+  }
+
+  Future<void> deleteGoal(String goalId) async {
     final deviceId = await _identityService.getDeviceId();
     final result = await _edgeClient.invoke(
       'goal-decomposition-agent',
       payload: {
+        'action': 'delete_goal',
+        'device_id': deviceId,
+        'goalId': goalId,
+      },
+      headers: {'x-device-id': deviceId},
+    );
+    if (!result.isSuccess || result.data?['success'] != true) {
+      throw StateError(result.error ?? 'Goal deletion failed.');
+    }
+  }
+
+  Future<GoalPlanResult> _planGoal({
+    String? action,
+    String? goalId,
+    required String title,
+    required DateTime targetDate,
+    String? context,
+  }) async {
+    final deviceId = await _identityService.getDeviceId();
+    final result = await _edgeClient.invoke(
+      'goal-decomposition-agent',
+      payload: {
+        if (action != null) 'action': action,
+        if (goalId != null) 'goalId': goalId,
         'device_id': deviceId,
         'goalTitle': title,
         'targetDate': _dateFormat.format(targetDate),
@@ -264,17 +322,6 @@ class GoalRepository {
     if (tasks is! List) {
       return const [];
     }
-    return [
-      for (final task in tasks.whereType<Map>())
-        Task(
-          id: task['id'] as String?,
-          title: task['title'] as String? ?? 'Goal task',
-          isCompleted: task['is_completed'] as bool? ?? false,
-          priority: TaskPriority.fromName(task['priority'] as String?),
-          dueDate:
-              DateTime.tryParse(task['log_date'] as String? ?? '') ??
-              DateTime.now(),
-        ),
-    ];
+    return [for (final task in tasks.whereType<Map>()) Task.fromJson(task)];
   }
 }

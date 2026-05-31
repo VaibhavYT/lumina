@@ -9,6 +9,9 @@ type ChatMessage = {
   content: string;
 };
 
+const quickQuestionMaxWords = 80;
+const untangleReplyMaxWords = 160;
+
 function chatHistory(value: unknown): ChatMessage[] {
   if (!Array.isArray(value)) {
     return [];
@@ -20,11 +23,24 @@ function chatHistory(value: unknown): ChatMessage[] {
       }
       const record = item as Record<string, unknown>;
       const role = record.role === "assistant" ? "assistant" : "user";
-      const content = String(record.content ?? "").trim();
+      const content = String(record.content ?? "").trim().slice(0, 1200);
       return content ? { role, content } : null;
     })
     .filter((item): item is ChatMessage => item !== null)
     .slice(-12);
+}
+
+function wordCount(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function isUnsupportedQuestion(value: string): boolean {
+  return [
+    /\b(code|coding|program|programming|debug|compile|javascript|typescript|python|java|flutter|dart|sql|html|css|api|algorithm|regex)\b/i,
+    /\b(solve|calculate|equation|algebra|geometry|calculus|derivative|integral|factor|simplify)\b/i,
+    /\d+\s*[-+*/^=]\s*\d+/,
+    /```/,
+  ].some((pattern) => pattern.test(value));
 }
 
 function payloadContext(value: unknown): Record<string, unknown> {
@@ -75,6 +91,27 @@ Deno.serve(async (req) => {
     if (!question) {
       return jsonResponse({ error: "question is required" }, 400);
     }
+    const appContext = payloadContext(payload.context);
+    const isUntangle = appContext.source === "untangle";
+    const untangleStage = String(appContext.stage ?? "");
+    if (untangleStage !== "breakthrough") {
+      const maxWords = isUntangle ? untangleReplyMaxWords : quickQuestionMaxWords;
+      if (wordCount(question) > maxWords) {
+        return jsonResponse({
+          answer: `Keep this under ${maxWords} words so Lumina can stay focused on the part that matters most.`,
+          rejected: true,
+          reason: "word_limit",
+        });
+      }
+      if (isUnsupportedQuestion(question)) {
+        return jsonResponse({
+          answer:
+            "Lumina is for your goals, habits, mood, tasks, and personal reflection. Bring the question back to your own progress and I will help you work through it.",
+          rejected: true,
+          reason: "unsupported_topic",
+        });
+      }
+    }
 
     const supabase = adminClient();
     if (!supabase) {
@@ -87,25 +124,39 @@ Deno.serve(async (req) => {
     });
     const sessionId = String(payload.sessionId ?? payload.session_id ?? crypto.randomUUID());
     const history = chatHistory(payload.history);
-    const appContext = payloadContext(payload.context);
-    const [{ data: recentLogs }, { data: tasks }, { data: habits }, { data: insights }] =
+    const [
+      { data: profile },
+      { data: recentLogs },
+      { data: tasks },
+      { data: habits },
+      { data: insights },
+      { data: activeGoal },
+    ] =
       await Promise.all([
+        supabase.from("profiles").select("display_name").eq("device_id", deviceId).maybeSingle(),
         supabase.from("daily_logs").select("log_date, mood, energy, notes").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(14),
-        supabase.from("tasks").select("log_date, title, is_completed, priority").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(40),
+        supabase.from("tasks").select("log_date, title, is_completed, priority, goal_id, metadata").eq("device_id", deviceId).order("log_date", { ascending: false }).limit(40),
         supabase.from("habits").select("name, frequency, is_active").eq("device_id", deviceId).eq("is_active", true),
         supabase.from("mentor_insights").select("insight_type, headline, body, generated_at").eq("device_id", deviceId).eq("is_dismissed", false).order("generated_at", { ascending: false }).limit(8),
+        supabase.from("goals").select("id, title, description, target_date, health_score").eq("device_id", deviceId).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
+    const { data: goalMilestones } = activeGoal
+      ? await supabase.from("goal_milestones")
+        .select("week_number, title, description, target_date, is_completed")
+        .eq("device_id", deviceId)
+        .eq("goal_id", activeGoal.id)
+        .order("week_number", { ascending: true })
+        .limit(16)
+      : { data: [] };
     const context = JSON.stringify({
-      recentLogs,
-      recentTasks: tasks,
-      activeHabits: habits,
-      recentInsights: insights,
-      appContext,
-      conversationHistory: history,
+      profile,
+      journal: { recentLogs },
+      dailyPlan: { recentTasks: tasks, activeHabits: habits },
+      goals: { activeGoal, milestones: goalMilestones },
+      mentorMemory: { recentInsights: insights },
+      conversation: { appContext, history },
     });
 
-    const isUntangle = appContext.source === "untangle";
-    const untangleStage = String(appContext.stage ?? "");
     const prompt = isUntangle && untangleStage === "breakthrough"
       ? `You are Lumina in Untangle mode. Synthesize this Socratic session into one Breakthrough card.
 
@@ -135,7 +186,8 @@ Rules:
 4. Prefer "why", "what", or "if" questions that reveal assumptions, fear, stakes, or values.
 5. Keep it under 24 words.
 6. If the user describes self-harm, immediate danger, or abuse, prioritize immediate safety in one concise sentence, then ask one grounding question.
-7. Return only the response text.`
+7. Stay within personal reflection, goals, habits, mood, and tasks. Do not answer coding, math, or general knowledge questions.
+8. Return only the response text.`
       : `You are Lumina, a warm, wise, direct AI life mentor.
 
 Context:
@@ -148,7 +200,8 @@ Rules:
 2. Be specific to context.
 3. End with one actionable suggestion or thought-provoking question.
 4. Never start with "I" or "Great question!".
-5. Return only the response text.`;
+5. Stay within personal reflection, goals, habits, mood, and tasks. Decline coding, math, and general knowledge questions.
+6. Return only the response text.`;
 
     const answer = await generateGeminiText(
       prompt,

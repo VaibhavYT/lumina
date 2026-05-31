@@ -136,6 +136,14 @@ Deno.serve(async (req) => {
         if (id) {
           row.id = id;
         }
+        const goalId = ensureUuid(task.goal_id ?? task.goalId);
+        if (goalId) {
+          row.goal_id = goalId;
+        }
+        const metadata = asRecord(task.metadata);
+        if (metadata) {
+          row.metadata = metadata;
+        }
         return row;
       })
       .filter(isRecord);

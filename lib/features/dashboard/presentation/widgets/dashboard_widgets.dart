@@ -11,6 +11,7 @@ import 'package:lumina/core/theme/app_spacing.dart';
 import 'package:lumina/core/utils/haptic_utils.dart';
 import 'package:lumina/features/dashboard/presentation/providers/dashboard_notifier.dart';
 import 'package:lumina/shared/widgets/animated_counter.dart';
+import 'package:lumina/shared/widgets/goal_task_tag.dart';
 import 'package:lumina/shared/widgets/gradient_icon.dart';
 import 'package:lumina/shared/widgets/lumina_button.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
@@ -447,6 +448,10 @@ class _DashboardTaskTileState extends State<DashboardTaskTile> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
+          if (task.isGoalTask) ...[
+            const GoalTaskTag(),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           _PriorityDot(priority: task.priority),
         ],
       ),

@@ -25,6 +25,8 @@ class Task {
     this.priority = TaskPriority.normal,
     DateTime? dueDate,
     DateTime? createdAt,
+    this.goalId,
+    this.metadata = const {},
   }) : id = id ?? _uuid.v4(),
        dueDate = dueDate ?? DateTime.now(),
        createdAt = createdAt ?? DateTime.now();
@@ -35,6 +37,13 @@ class Task {
   final TaskPriority priority;
   final DateTime dueDate;
   final DateTime createdAt;
+  final String? goalId;
+  final Map<String, dynamic> metadata;
+
+  bool get isGoalTask =>
+      goalId != null ||
+      metadata['source'] == 'goal_decomposition_agent' ||
+      (metadata['tags'] is List && (metadata['tags'] as List).contains('goal'));
 
   Task copyWith({
     String? title,
@@ -42,6 +51,8 @@ class Task {
     TaskPriority? priority,
     DateTime? dueDate,
     DateTime? createdAt,
+    String? goalId,
+    Map<String, dynamic>? metadata,
   }) {
     return Task(
       id: id,
@@ -50,6 +61,8 @@ class Task {
       priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
       createdAt: createdAt ?? this.createdAt,
+      goalId: goalId ?? this.goalId,
+      metadata: metadata ?? this.metadata,
     );
   }
 
@@ -61,10 +74,13 @@ class Task {
       'priority': priority.name,
       'dueDate': dueDate.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'goalId': goalId,
+      'metadata': metadata,
     };
   }
 
   factory Task.fromJson(Map<dynamic, dynamic> json) {
+    final rawMetadata = json['metadata'];
     return Task(
       id: json['id'] as String?,
       title: json['title'] as String? ?? '',
@@ -79,6 +95,10 @@ class Task {
       createdAt: DateTime.tryParse(
         json['createdAt'] as String? ?? json['created_at'] as String? ?? '',
       ),
+      goalId: json['goalId'] as String? ?? json['goal_id'] as String?,
+      metadata: rawMetadata is Map
+          ? Map<String, dynamic>.from(rawMetadata)
+          : const {},
     );
   }
 }

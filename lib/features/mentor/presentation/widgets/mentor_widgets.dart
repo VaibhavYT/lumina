@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,9 @@ import 'package:lumina/core/extensions/context_extensions.dart';
 import 'package:lumina/core/theme/app_motion.dart';
 import 'package:lumina/core/theme/app_radius.dart';
 import 'package:lumina/core/theme/app_spacing.dart';
+import 'package:lumina/core/utils/haptic_utils.dart';
 import 'package:lumina/features/mentor/data/repositories/mentor_repository.dart';
+import 'package:lumina/features/mentor/domain/mentor_input_policy.dart';
 import 'package:lumina/shared/widgets/lumina_button.dart';
 import 'package:lumina/shared/widgets/lumina_card.dart';
 import 'package:lumina/shared/widgets/lumina_tag.dart';
@@ -185,10 +188,37 @@ class _PulseDot extends StatelessWidget {
   }
 }
 
+@immutable
+class MentorReadingProfile {
+  const MentorReadingProfile({this.mood, this.energy});
+
+  final int? mood;
+  final int? energy;
+
+  bool get _needsRecovery => (mood ?? 3) <= 2 || (energy ?? 3) <= 2;
+
+  bool get _isEnergized => (mood ?? 3) >= 4 && (energy ?? 3) >= 4;
+
+  double get lineHeight => _needsRecovery
+      ? 1.70
+      : _isEnergized
+      ? 1.46
+      : 1.55;
+
+  Color textColor(Color foreground, Color background) {
+    return Color.lerp(foreground, background, _needsRecovery ? 0.05 : 0)!;
+  }
+}
+
 class DailyReflectionCard extends StatelessWidget {
-  const DailyReflectionCard({super.key, required this.insight});
+  const DailyReflectionCard({
+    super.key,
+    required this.insight,
+    required this.readingProfile,
+  });
 
   final MentorInsight insight;
+  final MentorReadingProfile readingProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +234,7 @@ class DailyReflectionCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          TypewriterText(text: insight.body),
+          TypewriterText(text: insight.body, readingProfile: readingProfile),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -308,9 +338,16 @@ class UntangleEntryCard extends StatelessWidget {
 }
 
 class TypewriterText extends StatefulWidget {
-  const TypewriterText({super.key, required this.text});
+  const TypewriterText({
+    super.key,
+    required this.text,
+    required this.readingProfile,
+    this.hapticTexture = HapticTexture.soft,
+  });
 
   final String text;
+  final MentorReadingProfile readingProfile;
+  final HapticTexture hapticTexture;
 
   @override
   State<TypewriterText> createState() => _TypewriterTextState();
@@ -318,18 +355,44 @@ class TypewriterText extends StatefulWidget {
 
 class _TypewriterTextState extends State<TypewriterText> {
   var _visible = 0;
+  var _generation = 0;
 
   @override
   void initState() {
     super.initState();
-    _tick();
+    _restart();
   }
 
-  Future<void> _tick() async {
-    while (mounted && _visible < widget.text.length) {
+  @override
+  void didUpdateWidget(covariant TypewriterText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _restart();
+    }
+  }
+
+  void _restart() {
+    _visible = 0;
+    _generation++;
+    _tick(_generation);
+  }
+
+  Future<void> _tick(int generation) async {
+    while (mounted &&
+        generation == _generation &&
+        _visible < widget.text.length) {
       await Future<void>.delayed(const Duration(milliseconds: 18));
-      if (mounted) {
+      if (mounted && generation == _generation) {
+        final index = _visible;
+        final character = widget.text[index];
         setState(() => _visible++);
+        unawaited(
+          HapticUtils.typewriterPurr(
+            index: index,
+            character: character,
+            texture: widget.hapticTexture,
+          ),
+        );
       }
     }
   }
@@ -338,7 +401,13 @@ class _TypewriterTextState extends State<TypewriterText> {
   Widget build(BuildContext context) {
     return Text(
       widget.text.substring(0, _visible.clamp(0, widget.text.length)),
-      style: context.textTheme.bodyLarge?.copyWith(height: 1.55),
+      style: context.textTheme.bodyLarge?.copyWith(
+        height: widget.readingProfile.lineHeight,
+        color: widget.readingProfile.textColor(
+          context.colors.textPrimary,
+          context.colors.backgroundCard,
+        ),
+      ),
     );
   }
 }
@@ -710,12 +779,14 @@ class InsightFeed extends StatelessWidget {
     required this.selectedDate,
     required this.isLoading,
     required this.onDismiss,
+    required this.readingProfile,
   });
 
   final List<MentorInsight> insights;
   final DateTime selectedDate;
   final bool isLoading;
   final ValueChanged<String> onDismiss;
+  final MentorReadingProfile readingProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -751,17 +822,223 @@ class InsightFeed extends StatelessWidget {
           )
         else
           for (final insight in insights)
-            Dismissible(
+            _LiquidInsightDismissible(
               key: ValueKey(insight.id),
-              direction: DismissDirection.startToEnd,
-              onDismissed: (_) => onDismiss(insight.id),
+              onDismiss: () => onDismiss(insight.id),
               child: Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _InsightCard(insight: insight, onDismiss: onDismiss),
+                child: _InsightCard(
+                  insight: insight,
+                  onDismiss: onDismiss,
+                  readingProfile: readingProfile,
+                ),
               ),
             ),
       ],
     );
+  }
+}
+
+class _LiquidInsightDismissible extends StatefulWidget {
+  const _LiquidInsightDismissible({
+    super.key,
+    required this.child,
+    required this.onDismiss,
+  });
+
+  final Widget child;
+  final VoidCallback onDismiss;
+
+  @override
+  State<_LiquidInsightDismissible> createState() =>
+      _LiquidInsightDismissibleState();
+}
+
+class _LiquidInsightDismissibleState extends State<_LiquidInsightDismissible>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pressController;
+  late final Animation<double> _pressure;
+  var _contact = const Offset(0.5, 0.5);
+  var _dragProgress = 0.0;
+  var _thresholdHapticSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressController = AnimationController(
+      vsync: this,
+      duration: AppMotion.fast,
+      reverseDuration: AppMotion.standard,
+    );
+    _pressure = CurvedAnimation(
+      parent: _pressController,
+      curve: AppMotion.enter,
+      reverseCurve: AppMotion.spring,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressController.dispose();
+    super.dispose();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || box.size.isEmpty) {
+      return;
+    }
+    setState(() {
+      _contact = Offset(
+        (event.localPosition.dx / box.size.width).clamp(0.0, 1.0),
+        (event.localPosition.dy / box.size.height).clamp(0.0, 1.0),
+      );
+    });
+    HapticUtils.light();
+    _pressController.forward();
+  }
+
+  void _releasePressure() {
+    _pressController.reverse();
+  }
+
+  void _handleDismissUpdate(DismissUpdateDetails details) {
+    if (details.reached && !_thresholdHapticSent) {
+      _thresholdHapticSent = true;
+      HapticUtils.medium();
+    } else if (!details.reached) {
+      _thresholdHapticSent = false;
+    }
+    setState(() => _dragProgress = details.progress);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      onPointerUp: (_) => _releasePressure(),
+      onPointerCancel: (_) => _releasePressure(),
+      child: Dismissible(
+        key: ValueKey('liquid-${widget.key}'),
+        direction: DismissDirection.startToEnd,
+        dismissThresholds: const {DismissDirection.startToEnd: 0.48},
+        movementDuration: const Duration(milliseconds: 420),
+        resizeDuration: AppMotion.standard,
+        onUpdate: _handleDismissUpdate,
+        onDismissed: (_) => widget.onDismiss(),
+        background: Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.md),
+            child: Icon(
+              PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+              color: colors.successColor,
+            ),
+          ),
+        ),
+        child: AnimatedBuilder(
+          animation: _pressure,
+          child: widget.child,
+          builder: (context, child) {
+            final pressure = _pressure.value;
+            final stretch = _dragProgress * 0.055;
+            return Transform(
+              alignment: Alignment(_contact.dx * 2 - 1, _contact.dy * 2 - 1),
+              transform: Matrix4.diagonal3Values(
+                1 + stretch - pressure * 0.012,
+                1 + stretch * 0.18 - pressure * 0.018,
+                1,
+              ),
+              child: Stack(
+                children: [
+                  child!,
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.radiusXl),
+                        child: CustomPaint(
+                          painter: _SurfaceTensionPainter(
+                            pressure: pressure,
+                            dragProgress: _dragProgress,
+                            contact: _contact,
+                            amber: colors.primaryAccent,
+                            indigo: colors.secondaryAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SurfaceTensionPainter extends CustomPainter {
+  const _SurfaceTensionPainter({
+    required this.pressure,
+    required this.dragProgress,
+    required this.contact,
+    required this.amber,
+    required this.indigo,
+  });
+
+  final double pressure;
+  final double dragProgress;
+  final Offset contact;
+  final Color amber;
+  final Color indigo;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (pressure == 0 && dragProgress == 0) {
+      return;
+    }
+    final origin = Offset(contact.dx * size.width, contact.dy * size.height);
+    final radius = math.max(size.width, size.height) * (0.28 + pressure * 0.16);
+    final depression = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.black.withValues(alpha: pressure * 0.16),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: origin, radius: radius));
+    canvas.drawCircle(origin, radius, depression);
+
+    final border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2 + dragProgress * 1.4
+      ..shader = LinearGradient(
+        begin: Alignment(-1 + contact.dx, -1 + contact.dy),
+        end: Alignment(1 - contact.dx, 1 - contact.dy),
+        colors: [
+          amber.withValues(alpha: 0.06 + pressure * 0.28),
+          indigo.withValues(alpha: 0.05 + dragProgress * 0.24),
+          Colors.transparent,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Offset.zero & size,
+        const Radius.circular(AppRadius.radiusXl),
+      ),
+      border,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SurfaceTensionPainter oldDelegate) {
+    return oldDelegate.pressure != pressure ||
+        oldDelegate.dragProgress != dragProgress ||
+        oldDelegate.contact != contact ||
+        oldDelegate.amber != amber ||
+        oldDelegate.indigo != indigo;
   }
 }
 
@@ -795,10 +1072,15 @@ class _FeedLoadingCard extends StatelessWidget {
 }
 
 class _InsightCard extends StatelessWidget {
-  const _InsightCard({required this.insight, required this.onDismiss});
+  const _InsightCard({
+    required this.insight,
+    required this.onDismiss,
+    required this.readingProfile,
+  });
 
   final MentorInsight insight;
   final ValueChanged<String> onDismiss;
+  final MentorReadingProfile readingProfile;
 
   bool get _isBurnoutWarning => insight.insightType == 'burnout_warning';
 
@@ -852,7 +1134,11 @@ class _InsightCard extends StatelessWidget {
                     Text(
                       insight.body,
                       style: context.textTheme.bodyMedium?.copyWith(
-                        color: colors.textSecondary,
+                        height: readingProfile.lineHeight,
+                        color: readingProfile.textColor(
+                          colors.textSecondary,
+                          colors.backgroundCard,
+                        ),
                       ),
                     ),
                     if (_isBurnoutWarning && immediateAction != null) ...[
@@ -924,6 +1210,22 @@ class AskMentorComposer extends StatefulWidget {
 class _AskMentorComposerState extends State<AskMentorComposer> {
   final _controller = TextEditingController();
 
+  void _submit() {
+    final value = _controller.text;
+    final error = MentorInputPolicy.validate(
+      value,
+      maxWords: MentorInputPolicy.quickQuestionMaxWords,
+    );
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    widget.onSubmit(value.trim());
+    _controller.clear();
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -939,54 +1241,72 @@ class _AskMentorComposerState extends State<AskMentorComposer> {
         borderRadius: BorderRadius.circular(AppRadius.radiusXl),
         border: Border.all(color: context.colors.divider),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: context.colors.primaryAccent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              minLines: 1,
-              maxLines: 4,
-              style: context.textTheme.bodyMedium,
-              decoration: const InputDecoration(
-                hintText: 'Ask your mentor anything...',
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
+          Row(
+            children: [
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: context.colors.primaryAccent,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  minLines: 1,
+                  maxLines: 4,
+                  inputFormatters: const [
+                    MentorWordLimitFormatter(
+                      MentorInputPolicy.quickQuestionMaxWords,
+                    ),
+                  ],
+                  style: context.textTheme.bodyMedium,
+                  decoration: const InputDecoration(
+                    hintText: 'Ask about your goals, habits, mood, or tasks...',
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _submit,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: context.colors.primaryAccent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    PhosphorIcons.check(PhosphorIconsStyle.bold),
+                    color: context.isDark
+                        ? context.colors.backgroundPrimary
+                        : Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
-          GestureDetector(
-            onTap: () {
-              final value = _controller.text;
-              widget.onSubmit(value);
-              if (value.trim().isNotEmpty) {
-                _controller.clear();
-              }
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, _) {
+              return Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${MentorInputPolicy.wordCount(value.text)}/${MentorInputPolicy.quickQuestionMaxWords} words',
+                  style: context.textTheme.labelSmall?.copyWith(
+                    color: context.colors.textTertiary,
+                  ),
+                ),
+              );
             },
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: context.colors.primaryAccent,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                PhosphorIcons.check(PhosphorIconsStyle.bold),
-                color: context.isDark
-                    ? context.colors.backgroundPrimary
-                    : Colors.white,
-              ),
-            ),
           ),
         ],
       ),
@@ -999,10 +1319,12 @@ class MentorChatSheet extends StatefulWidget {
     super.key,
     required this.initialQuestion,
     required this.repository,
+    required this.readingProfile,
   });
 
   final String initialQuestion;
   final MentorRepository repository;
+  final MentorReadingProfile readingProfile;
 
   @override
   State<MentorChatSheet> createState() => _MentorChatSheetState();
@@ -1060,7 +1382,10 @@ class _MentorChatSheetState extends State<MentorChatSheet> {
                     if (_isSending && index == _messages.length) {
                       return const _TypingBubble();
                     }
-                    return _ChatBubble(message: _messages[index]);
+                    return _ChatBubble(
+                      message: _messages[index],
+                      readingProfile: widget.readingProfile,
+                    );
                   },
                 ),
               ),
@@ -1079,6 +1404,16 @@ class _MentorChatSheetState extends State<MentorChatSheet> {
   Future<void> _send(String raw) async {
     final question = raw.trim();
     if (question.isEmpty || _isSending) {
+      return;
+    }
+    final error = MentorInputPolicy.validate(
+      question,
+      maxWords: MentorInputPolicy.quickQuestionMaxWords,
+    );
+    if (error != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -1177,9 +1512,10 @@ class _ChatHeader extends StatelessWidget {
 }
 
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message});
+  const _ChatBubble({required this.message, required this.readingProfile});
 
   final MentorChatMessage message;
+  final MentorReadingProfile readingProfile;
 
   bool get _isUser => message.role == MentorChatRole.user;
 
@@ -1211,10 +1547,13 @@ class _ChatBubble extends StatelessWidget {
         child: Text(
           message.content,
           style: context.textTheme.bodyMedium?.copyWith(
-            height: 1.45,
+            height: _isUser ? 1.45 : readingProfile.lineHeight,
             color: _isUser
                 ? (context.isDark ? colors.backgroundPrimary : Colors.white)
-                : colors.textPrimary,
+                : readingProfile.textColor(
+                    colors.textPrimary,
+                    colors.backgroundCard,
+                  ),
           ),
         ),
       ),
@@ -1286,46 +1625,70 @@ class _ChatInput extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.radiusXl),
             border: Border.all(color: context.colors.divider),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  minLines: 1,
-                  maxLines: 5,
-                  enabled: !isSending,
-                  textInputAction: TextInputAction.newline,
-                  style: context.textTheme.bodyMedium,
-                  decoration: const InputDecoration(
-                    hintText: 'Message Lumina...',
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      enabled: !isSending,
+                      inputFormatters: const [
+                        MentorWordLimitFormatter(
+                          MentorInputPolicy.quickQuestionMaxWords,
+                        ),
+                      ],
+                      textInputAction: TextInputAction.newline,
+                      style: context.textTheme.bodyMedium,
+                      decoration: const InputDecoration(
+                        hintText: 'Ask about your progress...',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: AppSpacing.sm),
+                  GestureDetector(
+                    onTap: isSending ? null : onSend,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isSending
+                            ? context.colors.textTertiary
+                            : context.colors.primaryAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        PhosphorIcons.paperPlaneTilt(PhosphorIconsStyle.fill),
+                        color: context.isDark
+                            ? context.colors.backgroundPrimary
+                            : Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.sm),
-              GestureDetector(
-                onTap: isSending ? null : onSend,
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: isSending
-                        ? context.colors.textTertiary
-                        : context.colors.primaryAccent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    PhosphorIcons.paperPlaneTilt(PhosphorIconsStyle.fill),
-                    color: context.isDark
-                        ? context.colors.backgroundPrimary
-                        : Colors.white,
-                    size: 18,
-                  ),
-                ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, _) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${MentorInputPolicy.wordCount(value.text)}/${MentorInputPolicy.quickQuestionMaxWords} words',
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: context.colors.textTertiary,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),

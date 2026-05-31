@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumina/features/goals/data/repositories/goal_repository.dart';
+import 'package:lumina/features/log/presentation/providers/today_log_notifier.dart';
 
 final goalRepositoryProvider = Provider<GoalRepository>((ref) {
   return GoalRepository();
@@ -42,20 +43,71 @@ class GoalNotifier extends AsyncNotifier<GoalState> {
     required DateTime targetDate,
     String? context,
   }) async {
+    return _planGoal(
+      () => _repository.setGoal(
+        title: title,
+        targetDate: targetDate,
+        context: context,
+      ),
+    );
+  }
+
+  Future<GoalPlanResult> updateGoal({
+    required String goalId,
+    required String title,
+    required DateTime targetDate,
+    String? context,
+  }) {
+    return _planGoal(
+      () => _repository.updateGoal(
+        goalId: goalId,
+        title: title,
+        targetDate: targetDate,
+        context: context,
+      ),
+    );
+  }
+
+  Future<GoalPlanResult> replaceGoal({
+    required String goalId,
+    required String title,
+    required DateTime targetDate,
+    String? context,
+  }) {
+    return _planGoal(
+      () => _repository.replaceGoal(
+        goalId: goalId,
+        title: title,
+        targetDate: targetDate,
+        context: context,
+      ),
+    );
+  }
+
+  Future<void> deleteGoal(String goalId) async {
+    await _repository.deleteGoal(goalId);
+    ref.invalidate(todayLogNotifierProvider);
+    state = const AsyncData(
+      GoalState(
+        snapshot: GoalSnapshot(goal: null, milestones: [], stats: null),
+      ),
+    );
+  }
+
+  Future<GoalPlanResult> _planGoal(
+    Future<GoalPlanResult> Function() plan,
+  ) async {
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncData(current.copyWith(isPlanning: true));
     }
     try {
-      final result = await _repository.setGoal(
-        title: title,
-        targetDate: targetDate,
-        context: context,
-      );
+      final result = await plan();
       final snapshot = (await _repository.getActiveGoal()).copyWith(
         justCreatedSummary: result.goalSummary,
       );
       state = AsyncData(GoalState(snapshot: snapshot));
+      ref.invalidate(todayLogNotifierProvider);
       return result;
     } catch (_) {
       if (current != null) {

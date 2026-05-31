@@ -35,7 +35,11 @@ const luminaDestinations = [
     icon: PhosphorIcons.chartLineUp,
   ),
   NavDestination(label: 'Mentor', path: '/mentor', icon: PhosphorIcons.sparkle),
-  NavDestination(label: 'Agents', path: '/agents', icon: PhosphorIcons.robot),
+  NavDestination(
+    label: 'Agents',
+    path: '/agents',
+    icon: PhosphorIcons.shareNetwork,
+  ),
   NavDestination(
     label: 'Settings',
     path: '/settings',

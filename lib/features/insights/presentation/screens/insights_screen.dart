@@ -142,7 +142,8 @@ class _InsightsLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
         padding: EdgeInsets.all(AppSpacing.pagePadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
